@@ -42,30 +42,23 @@ struct efi __read_mostly efi = {
 };
 EXPORT_SYMBOL(efi);
 
-#ifndef CONFIG_XEN
 static bool disable_runtime;
-#define disable_runtime() (disable_runtime = true)
-#else
-#define disable_runtime() __clear_bit(EFI_RUNTIME_SERVICES, &efi.flags)
-#endif
 static int __init setup_noefi(char *arg)
 {
-	disable_runtime();
+	disable_runtime = true;
 	return 0;
 }
 early_param("noefi", setup_noefi);
 
-#ifndef CONFIG_XEN
 bool efi_runtime_disabled(void)
 {
 	return disable_runtime;
 }
-#endif
 
 static int __init parse_efi_cmdline(char *str)
 {
 	if (parse_option_str(str, "noruntime"))
-		disable_runtime();
+		disable_runtime = true;
 
 	return 0;
 }
@@ -247,7 +240,6 @@ subsys_initcall(efisubsys_init);
  */
 void __iomem *efi_lookup_mapped_addr(u64 phys_addr)
 {
-#ifndef CONFIG_XEN
 	struct efi_memory_map *map;
 	void *p;
 	map = efi.memmap;
@@ -270,7 +262,6 @@ void __iomem *efi_lookup_mapped_addr(u64 phys_addr)
 			return (__force void __iomem *)(unsigned long)phys_addr;
 		}
 	}
-#endif
 	return NULL;
 }
 
@@ -318,7 +309,7 @@ int __init efi_config_parse_tables(void *config_tables, int count, int sz,
 		efi_guid_t guid;
 		unsigned long table;
 
-		if (sz == sizeof(efi_config_table_64_t)) {
+		if (efi_enabled(EFI_64BIT)) {
 			u64 table64;
 			guid = ((efi_config_table_64_t *)tablep)->guid;
 			table64 = ((efi_config_table_64_t *)tablep)->table;
@@ -345,7 +336,6 @@ int __init efi_config_parse_tables(void *config_tables, int count, int sz,
 	return 0;
 }
 
-#ifndef CONFIG_XEN
 int __init efi_config_init(efi_config_table_type_t *arch_tables)
 {
 	void *config_tables;
@@ -372,7 +362,6 @@ int __init efi_config_init(efi_config_table_type_t *arch_tables)
 	early_memunmap(config_tables, efi.systab->nr_tables * sz);
 	return ret;
 }
-#endif
 
 #ifdef CONFIG_EFI_VARS_MODULE
 static int __init efi_load_efivars(void)

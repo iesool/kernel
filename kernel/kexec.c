@@ -45,18 +45,12 @@
 #include <crypto/hash.h>
 #include <crypto/sha.h>
 
-#ifndef CONFIG_XEN
 /* Per cpu memory for storing cpu states in case of system crash. */
 note_buf_t __percpu *crash_notes;
-#endif
 
 /* vmcoreinfo stuff */
 static unsigned char vmcoreinfo_data[VMCOREINFO_BYTES];
-u32
-#if defined(CONFIG_XEN) && defined(CONFIG_X86)
-__page_aligned_bss
-#endif
-vmcoreinfo_note[VMCOREINFO_NOTE_SIZE/4];
+u32 vmcoreinfo_note[VMCOREINFO_NOTE_SIZE/4];
 size_t vmcoreinfo_size;
 size_t vmcoreinfo_max_size = sizeof(vmcoreinfo_data);
 
@@ -643,26 +637,13 @@ static int kimage_is_destination_range(struct kimage *image,
 	return 0;
 }
 
-static struct page *kimage_alloc_pages(gfp_t gfp_mask, unsigned int order, unsigned long limit)
+static struct page *kimage_alloc_pages(gfp_t gfp_mask, unsigned int order)
 {
 	struct page *pages;
 
 	pages = alloc_pages(gfp_mask, order);
 	if (pages) {
 		unsigned int count, i;
-#ifdef CONFIG_XEN
-		int address_bits;
-
-		if (limit == ~0UL)
-			address_bits = BITS_PER_LONG;
-		else
-			address_bits = ilog2(limit);
-
-		if (xen_limit_pages_to_max_mfn(pages, order, address_bits) < 0) {
-			__free_pages(pages, order);
-			return NULL;
-		}
-#endif
 		pages->mapping = NULL;
 		set_page_private(pages, order);
 		count = 1 << order;
@@ -726,11 +707,10 @@ static struct page *kimage_alloc_normal_control_pages(struct kimage *image,
 	do {
 		unsigned long pfn, epfn, addr, eaddr;
 
-		pages = kimage_alloc_pages(KEXEC_CONTROL_MEMORY_GFP, order,
-					   KEXEC_CONTROL_MEMORY_LIMIT);
+		pages = kimage_alloc_pages(KEXEC_CONTROL_MEMORY_GFP, order);
 		if (!pages)
 			break;
-		pfn   = kexec_page_to_pfn(pages);
+		pfn   = page_to_pfn(pages);
 		epfn  = pfn + count;
 		addr  = pfn << PAGE_SHIFT;
 		eaddr = epfn << PAGE_SHIFT;
@@ -764,7 +744,6 @@ static struct page *kimage_alloc_normal_control_pages(struct kimage *image,
 	return pages;
 }
 
-#ifndef CONFIG_XEN
 static struct page *kimage_alloc_crash_control_pages(struct kimage *image,
 						      unsigned int order)
 {
@@ -816,7 +795,7 @@ static struct page *kimage_alloc_crash_control_pages(struct kimage *image,
 		}
 		/* If I don't overlap any segments I have found my hole! */
 		if (i == image->nr_segments) {
-			pages = kexec_pfn_to_page(hole_start >> PAGE_SHIFT);
+			pages = pfn_to_page(hole_start >> PAGE_SHIFT);
 			break;
 		}
 	}
@@ -843,13 +822,6 @@ struct page *kimage_alloc_control_pages(struct kimage *image,
 
 	return pages;
 }
-#else /* !CONFIG_XEN */
-struct page *kimage_alloc_control_pages(struct kimage *image,
-					 unsigned int order)
-{
-	return kimage_alloc_normal_control_pages(image, order);
-}
-#endif
 
 static int kimage_add_entry(struct kimage *image, kimage_entry_t entry)
 {
@@ -865,7 +837,7 @@ static int kimage_add_entry(struct kimage *image, kimage_entry_t entry)
 			return -ENOMEM;
 
 		ind_page = page_address(page);
-		*image->entry = kexec_virt_to_phys(ind_page) | IND_INDIRECTION;
+		*image->entry = virt_to_phys(ind_page) | IND_INDIRECTION;
 		image->entry = ind_page;
 		image->last_entry = ind_page +
 				      ((PAGE_SIZE/sizeof(kimage_entry_t)) - 1);
@@ -920,13 +892,13 @@ static void kimage_terminate(struct kimage *image)
 #define for_each_kimage_entry(image, ptr, entry) \
 	for (ptr = &image->head; (entry = *ptr) && !(entry & IND_DONE); \
 		ptr = (entry & IND_INDIRECTION) ? \
-			kexec_phys_to_virt((entry & PAGE_MASK)) : ptr + 1)
+			phys_to_virt((entry & PAGE_MASK)) : ptr + 1)
 
 static void kimage_free_entry(kimage_entry_t entry)
 {
 	struct page *page;
 
-	page = kexec_pfn_to_page(entry >> PAGE_SHIFT);
+	page = pfn_to_page(entry >> PAGE_SHIFT);
 	kimage_free_pages(page);
 }
 
@@ -937,10 +909,6 @@ static void kimage_free(struct kimage *image)
 
 	if (!image)
 		return;
-
-#ifdef CONFIG_XEN
-	xen_machine_kexec_unload(image);
-#endif
 
 	kimage_free_extra_pages(image);
 	for_each_kimage_entry(image, ptr, entry) {
@@ -1024,7 +992,7 @@ static struct page *kimage_alloc_page(struct kimage *image,
 	 * have a match.
 	 */
 	list_for_each_entry(page, &image->dest_pages, lru) {
-		addr = kexec_page_to_pfn(page) << PAGE_SHIFT;
+		addr = page_to_pfn(page) << PAGE_SHIFT;
 		if (addr == destination) {
 			list_del(&page->lru);
 			return page;
@@ -1035,16 +1003,16 @@ static struct page *kimage_alloc_page(struct kimage *image,
 		kimage_entry_t *old;
 
 		/* Allocate a page, if we run out of memory give up */
-		page = kimage_alloc_pages(gfp_mask, 0, KEXEC_SOURCE_MEMORY_LIMIT);
+		page = kimage_alloc_pages(gfp_mask, 0);
 		if (!page)
 			return NULL;
 		/* If the page cannot be used file it away */
-		if (kexec_page_to_pfn(page) >
+		if (page_to_pfn(page) >
 				(KEXEC_SOURCE_MEMORY_LIMIT >> PAGE_SHIFT)) {
 			list_add(&page->lru, &image->unusable_pages);
 			continue;
 		}
-		addr = kexec_page_to_pfn(page) << PAGE_SHIFT;
+		addr = page_to_pfn(page) << PAGE_SHIFT;
 
 		/* If it is the destination page we want use it */
 		if (addr == destination)
@@ -1067,7 +1035,7 @@ static struct page *kimage_alloc_page(struct kimage *image,
 			struct page *old_page;
 
 			old_addr = *old & PAGE_MASK;
-			old_page = kexec_pfn_to_page(old_addr >> PAGE_SHIFT);
+			old_page = pfn_to_page(old_addr >> PAGE_SHIFT);
 			copy_highpage(page, old_page);
 			*old = addr | (*old & ~PAGE_MASK);
 
@@ -1126,7 +1094,7 @@ static int kimage_load_normal_segment(struct kimage *image,
 			result  = -ENOMEM;
 			goto out;
 		}
-		result = kimage_add_page(image, kexec_page_to_pfn(page)
+		result = kimage_add_page(image, page_to_pfn(page)
 								<< PAGE_SHIFT);
 		if (result < 0)
 			goto out;
@@ -1161,7 +1129,6 @@ out:
 	return result;
 }
 
-#ifndef CONFIG_XEN
 static int kimage_load_crash_segment(struct kimage *image,
 					struct kexec_segment *segment)
 {
@@ -1188,7 +1155,7 @@ static int kimage_load_crash_segment(struct kimage *image,
 		char *ptr;
 		size_t uchunk, mchunk;
 
-		page = kexec_pfn_to_page(maddr >> PAGE_SHIFT);
+		page = pfn_to_page(maddr >> PAGE_SHIFT);
 		if (!page) {
 			result  = -ENOMEM;
 			goto out;
@@ -1242,13 +1209,6 @@ static int kimage_load_segment(struct kimage *image,
 
 	return result;
 }
-#else /* CONFIG_XEN */
-static int kimage_load_segment(struct kimage *image,
-				struct kexec_segment *segment)
-{
-	return kimage_load_normal_segment(image, segment);
-}
-#endif
 
 /*
  * Exec Kernel system call: for obvious reasons only root may call it.
@@ -1359,13 +1319,6 @@ SYSCALL_DEFINE4(kexec_load, unsigned long, entry, unsigned long, nr_segments,
 		if (flags & KEXEC_ON_CRASH)
 			crash_unmap_reserved_pages();
 	}
-#ifdef CONFIG_XEN
-	if (image) {
-		result = xen_machine_kexec_load(image);
-		if (result)
-			goto out;
-	}
-#endif
 	/* Install the new kernel, and  Uninstall the old */
 	image = xchg(dest_image, image);
 
@@ -1524,12 +1477,6 @@ void crash_kexec(struct pt_regs *regs)
 			crash_save_vmcoreinfo();
 			machine_crash_shutdown(&fixed_regs);
 			machine_kexec(kexec_crash_image);
-#ifdef CONFIG_XEN
-		} else if (is_initial_xendomain()) {
-			xen_kexec_exec_t xke = { .type = KEXEC_TYPE_CRASH };
-
-			VOID(HYPERVISOR_kexec_op(KEXEC_CMD_kexec, &xke));
-#endif
 		}
 		mutex_unlock(&kexec_mutex);
 	}
@@ -1545,7 +1492,6 @@ size_t crash_get_memory_size(void)
 	return size;
 }
 
-#ifndef CONFIG_XEN
 void __weak crash_free_reserved_phys_range(unsigned long begin,
 					   unsigned long end)
 {
@@ -1605,7 +1551,6 @@ unlock:
 	mutex_unlock(&kexec_mutex);
 	return ret;
 }
-#endif /* !CONFIG_XEN */
 
 static u32 *append_elf_note(u32 *buf, char *name, unsigned type, void *data,
 			    size_t data_len)
@@ -1635,7 +1580,6 @@ static void final_note(u32 *buf)
 	memcpy(buf, &note, sizeof(note));
 }
 
-#ifndef CONFIG_XEN
 void crash_save_cpu(struct pt_regs *regs, int cpu)
 {
 	struct elf_prstatus prstatus;
@@ -1661,24 +1605,20 @@ void crash_save_cpu(struct pt_regs *regs, int cpu)
 			      &prstatus, sizeof(prstatus));
 	final_note(buf);
 }
-#endif
 
 static int __init crash_notes_memory_init(void)
 {
-#ifndef CONFIG_XEN
 	/* Allocate memory for saving cpu registers. */
 	crash_notes = alloc_percpu(note_buf_t);
 	if (!crash_notes) {
 		pr_warn("Kexec: Memory allocation for saving cpu register states failed\n");
 		return -ENOMEM;
 	}
-#endif
 	return 0;
 }
 subsys_initcall(crash_notes_memory_init);
 
 
-#ifndef CONFIG_XEN
 /*
  * parsing the "crashkernel" commandline
  *
@@ -1950,7 +1890,6 @@ int __init parse_crashkernel_low(char *cmdline,
 	return __parse_crashkernel(cmdline, system_ram, crash_size, crash_base,
 				"crashkernel=", suffix_tbl[SUFFIX_LOW]);
 }
-#endif
 
 static void update_vmcoreinfo_note(void)
 {
@@ -2006,18 +1945,7 @@ static int __init crash_save_vmcoreinfo_init(void)
 	VMCOREINFO_SYMBOL(init_uts_ns);
 	VMCOREINFO_SYMBOL(node_online_map);
 #ifdef CONFIG_MMU
-# ifndef CONFIG_X86_XEN
 	VMCOREINFO_SYMBOL(swapper_pg_dir);
-# else
-/*
- * Since for x86-32 Xen swapper_pg_dir is a pointer rather than an array,
- * make the value stored consistent with native (i.e. the base address of
- * the page directory).
- */
-#  define swapper_pg_dir *swapper_pg_dir
-	VMCOREINFO_SYMBOL(swapper_pg_dir);
-#  undef swapper_pg_dir
-# endif
 #endif
 	VMCOREINFO_SYMBOL(_stext);
 	VMCOREINFO_SYMBOL(vmap_area_list);

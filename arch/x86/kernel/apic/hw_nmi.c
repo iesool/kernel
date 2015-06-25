@@ -28,10 +28,6 @@ u64 hw_nmi_get_sample_period(int watchdog_thresh)
 #endif
 
 #ifdef arch_trigger_all_cpu_backtrace
-#ifdef CONFIG_XEN
-#include <asm/ipi.h>
-#endif
-
 /* For reliability, we're prepared to waste bits here. */
 static DECLARE_BITMAP(backtrace_mask, NR_CPUS) __read_mostly;
 static cpumask_t printtrace_mask;
@@ -90,11 +86,7 @@ void arch_trigger_all_cpu_backtrace(bool include_self)
 	if (!cpumask_empty(to_cpumask(backtrace_mask))) {
 		pr_info("sending NMI to %s CPUs:\n",
 			(include_self ? "all" : "other"));
-#ifndef CONFIG_XEN
 		apic->send_IPI_mask(to_cpumask(backtrace_mask), NMI_VECTOR);
-#else /* this works even without CONFIG_X86_LOCAL_APIC */
-		xen_send_IPI_mask(to_cpumask(backtrace_mask), NMI_VECTOR);
-#endif
 	}
 
 	/* Wait for up to 10 seconds for all CPUs to do the backtrace */

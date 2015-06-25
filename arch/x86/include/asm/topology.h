@@ -30,7 +30,7 @@
 #  define ENABLE_TOPO_DEFINES
 # endif
 #else
-# if defined(CONFIG_SMP) && !defined(CONFIG_XEN)
+# ifdef CONFIG_SMP
 #  define ENABLE_TOPO_DEFINES
 # endif
 #endif
@@ -119,10 +119,8 @@ static inline void setup_node_to_cpumask_map(void) { }
 
 extern const struct cpumask *cpu_coregroup_mask(int cpu);
 
-#ifndef CONFIG_XEN
 #define topology_physical_package_id(cpu)	(cpu_data(cpu).phys_proc_id)
 #define topology_core_id(cpu)			(cpu_data(cpu).cpu_core_id)
-#endif
 
 #ifdef ENABLE_TOPO_DEFINES
 #define topology_core_cpumask(cpu)		(per_cpu(cpu_core_map, cpu))

@@ -131,11 +131,7 @@ struct qat_alg_ablkcipher_ctx {
 
 static int get_current_node(void)
 {
-#ifndef CONFIG_XEN
 	return cpu_data(current_thread_info()->cpu).phys_proc_id;
-#else
-	return 0;
-#endif
 }
 
 static int qat_get_inter_state_size(enum icp_qat_hw_auth_algo qat_hash_alg)

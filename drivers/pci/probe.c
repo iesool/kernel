@@ -1514,11 +1514,6 @@ static void pci_init_capabilities(struct pci_dev *dev)
 	/* Vital Product Data */
 	pci_vpd_pci22_init(dev);
 
-#ifdef CONFIG_XEN
-	if (!is_initial_xendomain())
-		return;
-#endif
-
 	/* Alternative Routing-ID Forwarding */
 	pci_configure_ari(dev);
 
@@ -1634,10 +1629,6 @@ static unsigned next_fn(struct pci_bus *bus, struct pci_dev *dev, unsigned fn)
 	/* dev may be NULL for non-contiguous multifunction devices */
 	if (!dev || dev->multifunction)
 		return (fn + 1) % 8;
-#ifdef pcibios_scan_all_fns
-	if (pcibios_scan_all_fns(bus, dev->devfn))
-		return (fn + 1) % 8;
-#endif
 
 	return 0;
 }
@@ -1676,12 +1667,9 @@ int pci_scan_slot(struct pci_bus *bus, int devfn)
 		return 0; /* Already scanned the entire slot */
 
 	dev = pci_scan_single_device(bus, devfn);
-	if (!dev) {
-#ifdef pcibios_scan_all_fns
-		if (!pcibios_scan_all_fns(bus, devfn))
-#endif
+	if (!dev)
 		return 0;
-	} else if (!dev->is_added)
+	if (!dev->is_added)
 		nr++;
 
 	for (fn = next_fn(bus, dev, 0); fn > 0; fn = next_fn(bus, dev, fn)) {

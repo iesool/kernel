@@ -2255,7 +2255,7 @@ static void intel_disable_primary_hw_plane(struct drm_plane *plane,
 
 static bool need_vtd_wa(struct drm_device *dev)
 {
-#if defined(CONFIG_INTEL_IOMMU) || defined(CONFIG_XEN)
+#ifdef CONFIG_INTEL_IOMMU
 	if (INTEL_INFO(dev)->gen >= 6 && intel_iommu_gfx_mapped)
 		return true;
 #endif

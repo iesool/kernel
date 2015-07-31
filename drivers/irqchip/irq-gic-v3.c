@@ -1137,6 +1137,8 @@ madt_dist:
 		goto out_redist_unmap;
 	}
 
+	its_acpi_probe(table);
+
 	err = gic_init_bases(dist_base, redist_regs, redist_regions, 0, NULL);
 	if (err)
 		goto out_dist_unmap;

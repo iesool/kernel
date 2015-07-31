@@ -27,10 +27,12 @@
 #include <linux/of_irq.h>
 #include <linux/of_pci.h>
 #include <linux/of_platform.h>
+#include <linux/acpi.h>
 #include <linux/percpu.h>
 #include <linux/slab.h>
 
 #include <linux/irqchip/arm-gic-v3.h>
+#include <linux/irqchip/arm-gic-acpi.h>
 
 #include <asm/cacheflush.h>
 #include <asm/cputype.h>
@@ -1602,6 +1604,38 @@ void its_of_probe(struct device_node *node)
 		}
 	}
 }
+
+#ifdef CONFIG_ACPI
+static int __init
+gic_acpi_parse_madt_its(struct acpi_subtable_header *header,
+			const unsigned long end)
+{
+	struct acpi_madt_generic_its *its;
+
+	if (BAD_MADT_ENTRY(header, end))
+		return -EINVAL;
+
+	its = (struct acpi_madt_generic_its *)header;
+
+	pr_info("ITS: ID: 0x%x\n", its->its_id);
+	its_probe(its->base_address, 2 * SZ_64K);
+	return 0;
+}
+
+void __init its_acpi_probe(struct acpi_table_header *table)
+{
+	int count;
+
+	count = acpi_parse_entries(ACPI_SIG_MADT,
+			sizeof(struct acpi_table_madt),
+			gic_acpi_parse_madt_its, table,
+			ACPI_MADT_TYPE_GENERIC_ITS, 0);
+	if (!count)
+		pr_info("No valid GIC ITS entries exist\n");
+	else if (count < 0)
+		pr_err("Error during GIC ITS entries parsing\n");
+}
+#endif
 
 void its_init(struct rdists *rdists, struct irq_domain *domain)
 {

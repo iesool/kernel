@@ -51,10 +51,31 @@ static inline void arch_spin_lock(arch_spinlock_t *lock)
 	 * unlock before the exclusive load.
 	 */
 "	sevl\n"
-"2:	wfe\n"
+	/* Delay if our ticket is not the next ticket. */
+"	uxth	%w2, %w0\n"
+"	lsr	%w0, %w0, 16\n"
+	/* %w2 is the difference between our ticket and the current ticket. */
+"2:	sub	%w2, %w0, %w2\n"
+	/* If the tickets have wrapped, then we need to add USHORT_MAX.  */
+"	cmp	%w2, wzr\n"
+"	b.lt	5f\n"
+"6:	sub	%w2, %w2, 1\n"
+"	cbz	%w2, 7f\n"
+	/* Multiply by 64, a good estimate of how long an lock/unlock will take. */
+"	lsl	%w2, %w2, 6\n"
+	/* Spin until we get 0. */
+"4:	sub	%w2, %w2, 1\n"
+"	cbnz	%w2, 4b\n"
+	/* Wait for event, we might not be the current ticket. */
+"7:	wfe\n"
 "	ldaxrh	%w2, %4\n"
-"	eor	%w1, %w2, %w0, lsr #16\n"
+"	eor	%w1, %w2, %w0\n"
 "	cbnz	%w1, 2b\n"
+"	b	3f\n"
+	/* Wrap case, add USHORT_MAX to wrap around again. */
+"5:	mov	%w1, 0xffff\n"
+"	add	%w2, %w2, %w1\n"
+"	b	7b\n"
 	/* We got the lock. Critical section starts here. */
 "3:"
 	: "=&r" (lockval), "=&r" (newval), "=&r" (tmp), "+Q" (*lock)

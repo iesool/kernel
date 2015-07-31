@@ -1607,6 +1607,8 @@ static int only_one_child(struct pci_bus *bus)
 {
 	struct pci_dev *parent = bus->self;
 
+	if (bus->is_pcierc)
+		return 1;
 	if (!parent || !pci_is_pcie(parent))
 		return 0;
 	if (pci_pcie_type(parent) == PCI_EXP_TYPE_ROOT_PORT)

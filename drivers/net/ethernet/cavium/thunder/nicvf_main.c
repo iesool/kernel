@@ -482,6 +482,12 @@ static void nicvf_rcv_pkt_handler(struct net_device *netdev,
 			       skb->data, skb->len, true);
 	}
 
+	/* If error packet, drop it here */
+	if (err) {
+		dev_kfree_skb_any(skb);
+		return;
+	}
+
 	nicvf_set_rx_frame_cnt(nic, skb);
 
 	nicvf_set_rxhash(netdev, cqe_rx, skb);
@@ -1137,7 +1143,7 @@ void nicvf_update_lmac_stats(struct nicvf *nic)
 void nicvf_update_stats(struct nicvf *nic)
 {
 	int qidx;
-	struct nicvf_hw_stats *stats = &nic->stats;
+	struct nicvf_hw_stats *stats = &nic->hw_stats;
 	struct nicvf_drv_stats *drv_stats = &nic->drv_stats;
 	struct queue_set *qs = nic->qs;
 
@@ -1146,14 +1152,16 @@ void nicvf_update_stats(struct nicvf *nic)
 #define GET_TX_STATS(reg) \
 	nicvf_reg_read(nic, NIC_VNIC_TX_STAT_0_4 | (reg << 3))
 
-	stats->rx_bytes_ok = GET_RX_STATS(RX_OCTS);
-	stats->rx_ucast_frames_ok = GET_RX_STATS(RX_UCAST);
-	stats->rx_bcast_frames_ok = GET_RX_STATS(RX_BCAST);
-	stats->rx_mcast_frames_ok = GET_RX_STATS(RX_MCAST);
+	stats->rx_bytes = GET_RX_STATS(RX_OCTS);
+	stats->rx_ucast_frames = GET_RX_STATS(RX_UCAST);
+	stats->rx_bcast_frames = GET_RX_STATS(RX_BCAST);
+	stats->rx_mcast_frames = GET_RX_STATS(RX_MCAST);
 	stats->rx_fcs_errors = GET_RX_STATS(RX_FCS);
 	stats->rx_l2_errors = GET_RX_STATS(RX_L2ERR);
 	stats->rx_drop_red = GET_RX_STATS(RX_RED);
+	stats->rx_drop_red_bytes = GET_RX_STATS(RX_RED_OCTS);
 	stats->rx_drop_overrun = GET_RX_STATS(RX_ORUN);
+	stats->rx_drop_overrun_bytes = GET_RX_STATS(RX_ORUN_OCTS);
 	stats->rx_drop_bcast = GET_RX_STATS(RX_DRP_BCAST);
 	stats->rx_drop_mcast = GET_RX_STATS(RX_DRP_MCAST);
 	stats->rx_drop_l3_bcast = GET_RX_STATS(RX_DRP_L3BCAST);
@@ -1165,9 +1173,6 @@ void nicvf_update_stats(struct nicvf *nic)
 	stats->tx_mcast_frames_ok = GET_TX_STATS(TX_MCAST);
 	stats->tx_drops = GET_TX_STATS(TX_DROP);
 
-	drv_stats->rx_frames_ok = stats->rx_ucast_frames_ok +
-				  stats->rx_bcast_frames_ok +
-				  stats->rx_mcast_frames_ok;
 	drv_stats->tx_frames_ok = stats->tx_ucast_frames_ok +
 				  stats->tx_bcast_frames_ok +
 				  stats->tx_mcast_frames_ok;
@@ -1186,14 +1191,15 @@ static struct rtnl_link_stats64 *nicvf_get_stats64(struct net_device *netdev,
 					    struct rtnl_link_stats64 *stats)
 {
 	struct nicvf *nic = netdev_priv(netdev);
-	struct nicvf_hw_stats *hw_stats = &nic->stats;
+	struct nicvf_hw_stats *hw_stats = &nic->hw_stats;
 	struct nicvf_drv_stats *drv_stats = &nic->drv_stats;
 
 	nicvf_update_stats(nic);
 
-	stats->rx_bytes = hw_stats->rx_bytes_ok;
+	stats->rx_bytes = hw_stats->rx_bytes;
 	stats->rx_packets = drv_stats->rx_frames_ok;
 	stats->rx_dropped = drv_stats->rx_drops;
+	stats->multicast = hw_stats->rx_mcast_frames;
 
 	stats->tx_bytes = hw_stats->tx_bytes_ok;
 	stats->tx_packets = drv_stats->tx_frames_ok;

@@ -391,6 +391,7 @@ int its_init(struct device_node *node, struct rdists *rdists,
 
 typedef u32 (*its_pci_requester_id_t)(struct pci_dev *, u16);
 void set_its_pci_requester_id(its_pci_requester_id_t fn);
+struct irq_domain *gic_get_irq_domain(void);
 #endif
 
 #endif

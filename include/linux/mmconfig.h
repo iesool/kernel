@@ -43,6 +43,10 @@ int pci_mmcfg_arch_init(void);
 void pci_mmcfg_arch_free(void);
 int pci_mmcfg_arch_map(struct pci_mmcfg_region *cfg);
 void pci_mmcfg_arch_unmap(struct pci_mmcfg_region *cfg);
+int pci_mmcfg_read(unsigned int seg, unsigned int bus,
+		   unsigned int devfn, int reg, int len, u32 *value);
+int pci_mmcfg_write(unsigned int seg, unsigned int bus,
+		    unsigned int devfn, int reg, int len, u32 value);
 
 extern struct list_head pci_mmcfg_list;
 

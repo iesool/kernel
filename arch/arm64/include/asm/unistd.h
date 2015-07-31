@@ -48,9 +48,6 @@
 #endif
 
 #define __ARCH_WANT_SYS_CLONE
-
-#ifndef __COMPAT_SYSCALL_NR
 #include <uapi/asm/unistd.h>
-#endif
 
 #define NR_syscalls (__NR_syscalls)

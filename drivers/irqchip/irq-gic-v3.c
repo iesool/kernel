@@ -770,6 +770,18 @@ static const struct irq_domain_ops gic_irq_domain_ops = {
 	.free = gic_irq_domain_free,
 };
 
+static const struct gic_capabilities gicv3_errata[] = {
+	{
+	}
+};
+
+static void gicv3_check_capabilities(void)
+{
+	u32 iidr = readl_relaxed(gic_data.dist_base + GICD_IIDR);
+
+	gic_check_capabilities(iidr, gicv3_errata, NULL);
+}
+
 static int __init gic_of_init(struct device_node *node, struct device_node *parent)
 {
 	void __iomem *dist_base;
@@ -828,6 +840,8 @@ static int __init gic_of_init(struct device_node *node, struct device_node *pare
 	gic_data.redist_regions = rdist_regs;
 	gic_data.nr_redist_regions = nr_redist_regions;
 	gic_data.redist_stride = redist_stride;
+
+	gicv3_check_capabilities();
 
 	/*
 	 * Find out how many interrupts are supported.

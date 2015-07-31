@@ -29,6 +29,14 @@ extern int isa_dma_bridge_buggy;
 #ifdef CONFIG_PCI
 
 #ifdef CONFIG_ACPI
+struct pci_controller {
+	struct acpi_device *companion;
+	int segment;
+	int node;		/* nearest node with memory or NUMA_NO_NODE for global allocation */
+};
+
+#define PCI_CONTROLLER(busdev) ((struct pci_controller *) busdev->sysdata)
+
 /*
  * ARM64 PCI config space access primitives.
  */

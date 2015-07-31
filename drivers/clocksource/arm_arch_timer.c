@@ -672,10 +672,11 @@ arch_timer_needs_probing(int type, const struct of_device_id *matches)
 	bool needs_probing = false;
 
 	dn = of_find_matching_node(NULL, matches);
-	if (dn && of_device_is_available(dn) && !(arch_timers_present & type))
-		needs_probing = true;
-	of_node_put(dn);
-
+	if (dn) {
+		if (dn && of_device_is_available(dn) && !(arch_timers_present & type))
+			needs_probing = true;
+		of_node_put(dn);
+	}
 	return needs_probing;
 }
 

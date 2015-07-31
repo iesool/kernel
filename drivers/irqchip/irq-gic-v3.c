@@ -868,7 +868,7 @@ static int __init gic_init_bases(void __iomem *dist_base,
 	set_handle_irq(gic_handle_irq);
 
 	if (IS_ENABLED(CONFIG_ARM_GIC_V3_ITS) && gic_dist_supports_lpis())
-		its_init(node, &gic_data.rdists, gic_data.domain);
+		its_init(&gic_data.rdists, gic_data.domain);
 
 	gic_smp_init();
 	gic_dist_init();
@@ -926,6 +926,8 @@ static int __init gic_of_init(struct device_node *node, struct device_node *pare
 
 	if (of_property_read_u64(node, "redistributor-stride", &redist_stride))
 		redist_stride = 0;
+
+	its_of_probe(node);
 
 	err = gic_init_bases(dist_base, rdist_regs, nr_redist_regions,
 			     redist_stride, node);

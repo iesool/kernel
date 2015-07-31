@@ -818,59 +818,23 @@ static void gicv3_check_capabilities(void)
 	gic_check_capabilities(iidr, gicv3_errata, NULL);
 }
 
-static int __init gic_of_init(struct device_node *node, struct device_node *parent)
+static int __init gic_init_bases(void __iomem *dist_base,
+			    struct redist_region *rdist_regs,
+			    u32 nr_redist_regions,
+			    u64 redist_stride,
+			    struct device_node *node)
 {
-	void __iomem *dist_base;
-	struct redist_region *rdist_regs;
-	u64 redist_stride;
-	u32 nr_redist_regions;
 	u32 typer;
 	u32 reg;
 	int gic_irqs;
 	int err;
-	int i;
-
-	dist_base = of_iomap(node, 0);
-	if (!dist_base) {
-		pr_err("%s: unable to map gic dist registers\n",
-			node->full_name);
-		return -ENXIO;
-	}
 
 	reg = readl_relaxed(dist_base + GICD_PIDR2) & GIC_PIDR2_ARCH_MASK;
 	if (reg != GIC_PIDR2_ARCH_GICv3 && reg != GIC_PIDR2_ARCH_GICv4) {
 		pr_err("%s: no distributor detected, giving up\n",
 			node->full_name);
-		err = -ENODEV;
-		goto out_unmap_dist;
+		return -ENODEV;
 	}
-
-	if (of_property_read_u32(node, "#redistributor-regions", &nr_redist_regions))
-		nr_redist_regions = 1;
-
-	rdist_regs = kzalloc(sizeof(*rdist_regs) * nr_redist_regions, GFP_KERNEL);
-	if (!rdist_regs) {
-		err = -ENOMEM;
-		goto out_unmap_dist;
-	}
-
-	for (i = 0; i < nr_redist_regions; i++) {
-		struct resource res;
-		int ret;
-
-		ret = of_address_to_resource(node, 1 + i, &res);
-		rdist_regs[i].redist_base = of_iomap(node, 1 + i);
-		if (ret || !rdist_regs[i].redist_base) {
-			pr_err("%s: couldn't map region %d\n",
-			       node->full_name, i);
-			err = -ENODEV;
-			goto out_unmap_rdist;
-		}
-		rdist_regs[i].phys_base = res.start;
-	}
-
-	if (of_property_read_u64(node, "redistributor-stride", &redist_stride))
-		redist_stride = 0;
 
 	gic_data.dist_base = dist_base;
 	gic_data.redist_regions = rdist_regs;
@@ -915,6 +879,57 @@ out_free:
 	if (gic_data.domain)
 		irq_domain_remove(gic_data.domain);
 	free_percpu(gic_data.rdists.rdist);
+	return err;
+}
+
+#ifdef CONFIG_OF
+static int __init gic_of_init(struct device_node *node, struct device_node *parent)
+{
+	void __iomem *dist_base;
+	struct redist_region *rdist_regs;
+	u64 redist_stride;
+	u32 nr_redist_regions;
+	int err, i;
+
+	dist_base = of_iomap(node, 0);
+	if (!dist_base) {
+		pr_err("%s: unable to map gic dist registers\n",
+			node->full_name);
+		return -ENXIO;
+	}
+
+	if (of_property_read_u32(node, "#redistributor-regions", &nr_redist_regions))
+		nr_redist_regions = 1;
+
+	rdist_regs = kzalloc(sizeof(*rdist_regs) * nr_redist_regions, GFP_KERNEL);
+	if (!rdist_regs) {
+		err = -ENOMEM;
+		goto out_unmap_dist;
+	}
+
+	for (i = 0; i < nr_redist_regions; i++) {
+		struct resource res;
+		int ret;
+
+		ret = of_address_to_resource(node, 1 + i, &res);
+		rdist_regs[i].redist_base = of_iomap(node, 1 + i);
+		if (ret || !rdist_regs[i].redist_base) {
+			pr_err("%s: couldn't map region %d\n",
+			       node->full_name, i);
+			err = -ENODEV;
+			goto out_unmap_rdist;
+		}
+		rdist_regs[i].phys_base = res.start;
+	}
+
+	if (of_property_read_u64(node, "redistributor-stride", &redist_stride))
+		redist_stride = 0;
+
+	err = gic_init_bases(dist_base, rdist_regs, nr_redist_regions,
+			     redist_stride, node);
+	if (!err)
+		return 0;
+
 out_unmap_rdist:
 	for (i = 0; i < nr_redist_regions; i++)
 		if (rdist_regs[i].redist_base)
@@ -926,3 +941,4 @@ out_unmap_dist:
 }
 
 IRQCHIP_DECLARE(gic_v3, "arm,gic-v3", gic_of_init);
+#endif

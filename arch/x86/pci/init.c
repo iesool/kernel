@@ -1,5 +1,6 @@
 #include <linux/pci.h>
 #include <linux/init.h>
+#include <linux/mmconfig.h>
 #include <asm/pci_x86.h>
 #include <asm/x86_init.h>
 

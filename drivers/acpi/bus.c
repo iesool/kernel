@@ -41,6 +41,7 @@
 #include <acpi/apei.h>
 #include <linux/dmi.h>
 #include <linux/suspend.h>
+#include <linux/mmconfig.h>
 
 #include "internal.h"
 

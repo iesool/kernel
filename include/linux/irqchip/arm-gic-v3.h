@@ -386,9 +386,12 @@ static inline void gic_write_eoir(u64 irq)
 
 struct irq_domain;
 int its_cpu_init(void);
-int its_init(struct device_node *node, struct rdists *rdists,
-	     struct irq_domain *domain);
+void its_init(struct rdists *rdists, struct irq_domain *domain);
+void its_of_probe(struct device_node *node);
 
+typedef u32 (*its_pci_requester_id_t)(struct pci_dev *, u16);
+void set_its_pci_requester_id(its_pci_requester_id_t fn);
+struct irq_domain *gic_get_irq_domain(void);
 #endif
 
 #endif

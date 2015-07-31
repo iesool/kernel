@@ -291,6 +291,12 @@ int __attribute_const__ kvm_target_cpu(void)
 			return KVM_ARM_TARGET_XGENE_POTENZA;
 		};
 		break;
+	case ARM_CPU_IMP_CAVIUM:
+		switch (part_number) {
+		case ARM_CPU_PART_THUNDER:
+			return KVM_ARM_TARGET_CAVIUM_THUNDER;
+		};
+		break;
 	};
 
 	return -EINVAL;

@@ -21,6 +21,7 @@
 #include <linux/kvm.h>
 #include <linux/kvm_host.h>
 #include <linux/interrupt.h>
+#include <linux/acpi.h>
 
 #include <clocksource/arm_arch_timer.h>
 #include <asm/arch_timer.h>
@@ -274,15 +275,10 @@ static const struct of_device_id arch_timer_of_match[] = {
 	{},
 };
 
-int kvm_timer_hyp_init(void)
+static int kvm_of_timer_hyp_init(unsigned int *ppi)
 {
 	struct device_node *np;
-	unsigned int ppi;
-	int err;
-
-	timecounter = arch_timer_get_timecounter();
-	if (!timecounter)
-		return -ENODEV;
+	int err = 0;
 
 	np = of_find_matching_node(NULL, arch_timer_of_match);
 	if (!np) {
@@ -290,19 +286,70 @@ int kvm_timer_hyp_init(void)
 		return -ENODEV;
 	}
 
-	ppi = irq_of_parse_and_map(np, 2);
-	if (!ppi) {
+	*ppi = irq_of_parse_and_map(np, 2);
+	if (!(*ppi)) {
 		kvm_err("kvm_arch_timer: no virtual timer interrupt\n");
 		err = -EINVAL;
-		goto out;
-	}
+	} else
+		kvm_info("%s IRQ%d\n", np->name, *ppi);
+
+	of_node_put(np);
+	return err;
+}
+
+#ifdef CONFIG_ACPI
+static struct acpi_table_gtdt *gtdt_acpi;
+
+static int arch_timer_acpi_parse(struct acpi_table_header *table)
+{
+	gtdt_acpi = (struct acpi_table_gtdt *)table;
+	return 0;
+}
+
+static int kvm_acpi_timer_hyp_init(unsigned int *ppi)
+{
+	/* The virtual timer interrupt was already
+	 * registered during initialization with ACPI.
+	 * Get the interrupt number from the tables
+	 * and point there.
+	 */
+	acpi_table_parse(ACPI_SIG_GTDT, arch_timer_acpi_parse);
+	if (!gtdt_acpi)
+		return -ENODEV;
+	if (!gtdt_acpi->virtual_timer_interrupt)
+		return -EINVAL;
+
+	*ppi = gtdt_acpi->virtual_timer_interrupt;
+	kvm_info("timer IRQ%d\n", *ppi);
+	return 0;
+}
+#else
+static int kvm_acpi_timer_hyp_init(unsigned int *ppi)
+{
+	return -ENODEV;
+}
+#endif
+
+int kvm_timer_hyp_init(void)
+{
+	unsigned int ppi;
+	int err;
+
+	timecounter = arch_timer_get_timecounter();
+	if (!timecounter)
+		return -ENODEV;
+
+	err = acpi_disabled ? kvm_of_timer_hyp_init(&ppi) :
+			      kvm_acpi_timer_hyp_init(&ppi);
+	if (err)
+		return err;
 
 	err = request_percpu_irq(ppi, kvm_arch_timer_handler,
 				 "kvm guest timer", kvm_get_running_vcpus());
 	if (err) {
 		kvm_err("kvm_arch_timer: can't request interrupt %d (%d)\n",
 			ppi, err);
-		goto out;
+		return err;
 	}
 
 	host_vtimer_irq = ppi;
@@ -319,14 +366,11 @@ int kvm_timer_hyp_init(void)
 		goto out_free;
 	}
 
-	kvm_info("%s IRQ%d\n", np->name, ppi);
 	on_each_cpu(kvm_timer_init_interrupt, NULL, 1);
 
-	goto out;
+	return 0;
 out_free:
 	free_percpu_irq(ppi, kvm_get_running_vcpus());
-out:
-	of_node_put(np);
 	return err;
 }
 

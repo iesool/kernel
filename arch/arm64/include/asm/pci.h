@@ -37,6 +37,9 @@ static inline int pci_proc_domain(struct pci_bus *bus)
 {
 	return 1;
 }
+
+void set_pcibios_add_device(int (*arg)(struct pci_dev *));
+
 #endif  /* CONFIG_PCI */
 
 #endif  /* __KERNEL__ */

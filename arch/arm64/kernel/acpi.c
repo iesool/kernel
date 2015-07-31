@@ -364,9 +364,11 @@ void __init acpi_gic_init(void)
 	}
 
 	err = acpi_gic_ver < ACPI_MADT_GIC_VER_V3 ?
-			gic_v2_acpi_init(table) : -ENXIO;
+			gic_v2_acpi_init(table) :
+			gic_v3_acpi_init(table);
 	if (err)
 		pr_err("Failed to initialize GIC IRQ controller");
+
 
 	early_acpi_os_unmap_memory((char *)table, tbl_size);
 }

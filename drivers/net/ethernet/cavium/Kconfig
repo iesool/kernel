@@ -33,6 +33,8 @@ config THUNDER_NIC_VF
 config	THUNDER_NIC_BGX
 	tristate "Thunder MAC interface driver (BGX)"
 	default NET_VENDOR_CAVIUM
+	select PHYLIB
+	select MDIO_OCTEON
 	---help---
 	  This driver supports programming and controlling of MAC
 	  interface from NIC physical function driver.

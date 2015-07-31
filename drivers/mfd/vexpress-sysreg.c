@@ -22,6 +22,7 @@
 #include <linux/slab.h>
 #include <linux/stat.h>
 #include <linux/vexpress.h>
+#include <linux/acpi.h>
 
 #define SYS_ID			0x000
 #define SYS_SW			0x004
@@ -55,15 +56,66 @@
 
 static void __iomem *__vexpress_sysreg_base;
 
+#ifdef CONFIG_ACPI
+static acpi_status check_vexpress_resource(struct acpi_resource *res,
+					   void *data)
+{
+	struct resource *vexpress_res = data;
+
+	if (!acpi_dev_resource_memory(res, vexpress_res))
+		pr_err("Failed to map vexpress memory resource\n");
+
+	__vexpress_sysreg_base = ioremap(vexpress_res->start,
+					resource_size(vexpress_res));
+	if (__vexpress_sysreg_base)
+		return AE_CTRL_TERMINATE;
+
+	return AE_OK;
+}
+
+static acpi_status find_vexpress_resource(acpi_handle handle, u32 lvl,
+					  void *context, void **rv)
+{
+	struct resource *vexpress_res = context;
+
+	acpi_walk_resources(handle, METHOD_NAME__CRS,
+			    check_vexpress_resource, context);
+
+	if (vexpress_res->flags)
+		return AE_CTRL_TERMINATE;
+
+	return AE_OK;
+}
+
+static void acpi_vexpress_sysreg_base(void)
+{
+	struct resource vexpress_res;
+
+	acpi_get_devices("LNRO0009", find_vexpress_resource, &vexpress_res,
+			 NULL);
+}
+#else
+static inline void acpi_vexpress_sysreg_base(void)
+{
+}
+#endif
+
 static void __iomem *vexpress_sysreg_base(void)
 {
-	if (!__vexpress_sysreg_base) {
-		struct device_node *node = of_find_compatible_node(NULL, NULL,
-				"arm,vexpress-sysreg");
+	struct device_node *node;
 
+	if (__vexpress_sysreg_base)
+		goto ret;
+
+	node = of_find_compatible_node(NULL, NULL, "arm,vexpress-sysreg");
+	if (node) {
 		__vexpress_sysreg_base = of_iomap(node, 0);
+		goto ret;
 	}
 
+	acpi_vexpress_sysreg_base();
+
+ret:
 	WARN_ON(!__vexpress_sysreg_base);
 
 	return __vexpress_sysreg_base;
@@ -255,10 +307,18 @@ static const struct of_device_id vexpress_sysreg_match[] = {
 	{},
 };
 
+#ifdef CONFIG_ACPI
+static const struct acpi_device_id vexpress_sysreg_acpi_match[] = {
+	{ "LNRO0009", },
+	{ }
+};
+#endif
+
 static struct platform_driver vexpress_sysreg_driver = {
 	.driver = {
 		.name = "vexpress-sysreg",
 		.of_match_table = vexpress_sysreg_match,
+		.acpi_match_table = ACPI_PTR(vexpress_sysreg_acpi_match),
 	},
 	.probe = vexpress_sysreg_probe,
 };

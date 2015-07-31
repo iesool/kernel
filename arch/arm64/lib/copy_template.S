@@ -169,9 +169,9 @@ D_h	.req x14
 	USER(12f, stp B_l, B_h, [dst, #16])
 	USER(12f, stp C_l, C_h, [dst, #32])
 	USER(12f, stp D_l, D_h, [dst, #48])
-	tst	count, #0x3f
 	add	src, src, #64
 	add	dst, dst, #64
+	tst	count, #0x3f
 	b.ne	.Ltail63
 	b	.Lsuccess
 

@@ -28,6 +28,7 @@
 #ifdef __KERNEL__
 
 #include <linux/string.h>
+#include <linux/thread_info.h>
 
 #include <asm/fpsimd.h>
 #include <asm/hw_breakpoint.h>

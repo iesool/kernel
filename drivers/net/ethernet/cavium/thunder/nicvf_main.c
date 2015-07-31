@@ -324,7 +324,7 @@ static int nicvf_rss_init(struct nicvf *nic)
 
 	nicvf_get_rss_size(nic);
 
-	if ((nic->qs->rq_cnt <= 1) || (cpi_alg != CPI_ALG_NONE)) {
+	if (cpi_alg != CPI_ALG_NONE) {
 		rss->enable = false;
 		rss->hash_bits = 0;
 		return 0;
@@ -427,6 +427,34 @@ static void nicvf_snd_pkt_handler(struct net_device *netdev,
 	}
 }
 
+static inline void nicvf_set_rxhash(struct net_device *netdev,
+				    struct cqe_rx_t *cqe_rx,
+				    struct sk_buff *skb)
+{
+	u8 hash_type;
+	u32 hash;
+
+	if (!(netdev->features & NETIF_F_RXHASH))
+		return;
+
+	switch (cqe_rx->rss_alg) {
+	case RSS_ALG_TCP_IP:
+	case RSS_ALG_UDP_IP:
+		hash_type = PKT_HASH_TYPE_L4;
+		hash = cqe_rx->rss_tag;
+		break;
+	case RSS_ALG_IP:
+		hash_type = PKT_HASH_TYPE_L3;
+		hash = cqe_rx->rss_tag;
+		break;
+	default:
+		hash_type = PKT_HASH_TYPE_NONE;
+		hash = 0;
+	}
+
+	skb_set_hash(skb, hash, hash_type);
+}
+
 static void nicvf_rcv_pkt_handler(struct net_device *netdev,
 				  struct napi_struct *napi,
 				  struct cmp_queue *cq,
@@ -455,6 +483,8 @@ static void nicvf_rcv_pkt_handler(struct net_device *netdev,
 	}
 
 	nicvf_set_rx_frame_cnt(nic, skb);
+
+	nicvf_set_rxhash(netdev, cqe_rx, skb);
 
 	skb_record_rx_queue(skb, cqe_rx->rq_idx);
 	if (netdev->hw_features & NETIF_F_RXCSUM) {
@@ -1280,6 +1310,10 @@ static int nicvf_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	netdev->features |= (NETIF_F_RXCSUM | NETIF_F_IP_CSUM | NETIF_F_SG |
 			     NETIF_F_TSO | NETIF_F_GRO);
+#ifdef	VNIC_RSS_SUPPORT
+	netdev->features |= NETIF_F_RXHASH;
+#endif
+
 	netdev->hw_features = netdev->features;
 
 	netdev->netdev_ops = &nicvf_netdev_ops;

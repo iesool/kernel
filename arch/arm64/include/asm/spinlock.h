@@ -46,48 +46,20 @@ static inline void arch_spin_lock(arch_spinlock_t *lock)
 	/* Did we get the lock? */
 "	eor	%w1, %w0, %w0, ror #16\n"
 "	cbz	%w1, 3f\n"
-	/* Put the current ticket into %w2 */
-"	uxth	%w2, %w0\n"
-	/* Put the our ticket into %w0 */
-"	lsr	%w0, %w0, 16\n"
 	/*
 	 * No: spin on the owner. Send a local event to avoid missing an
 	 * unlock before the exclusive load.
 	 */
 "	sevl\n"
-	/* Wait for event, we might not be the current ticket. */
 "2:	wfe\n"
-	/* Delay if our ticket is not the next ticket. */
-	/* %w2 is the difference between our ticket and the current ticket. */
-"2:	subs	%w2, %w0, %w2\n"
-	/* If the tickets have wrapped, then we need to add USHORT_MAX.  */
-"	b.mi	5f\n"
-	/* Subtract one from the difference. */
-"6:	subs	%w2, %w2, 1\n"
-	/*  Don't wait if we the next ticket. */
-"	b.eq	7f\n"
-	/* Multiply by 80, a good estimate of how long an lock/unlock will take. */
-"	lsl	%w2, %w2, #4\n"
-"	add	%w2, %w2, %w2, lsl #2\n"
-	/* Spin until we get 0. */
-"4:	subs	%w2, %w2, #1\n"
-"	b.ne	4b\n"
-
-	/* Get the current ticket. */
-"7:	ldaxrh	%w2, %4\n"
-	/* See if we get the ticket, otherwise loop. */
-"	cmp	%w2, %w0\n"
-"	b.ne	2b\n"
-"	b	3f\n"
-	/* Wrap case, add USHORT_MAX to wrap around again. */
-"5:	mov	%w1, 0xffff\n"
-"	add	%w2, %w2, %w1\n"
-"	b	7b\n"
+"	ldaxrh	%w2, %4\n"
+"	eor	%w1, %w2, %w0, lsr #16\n"
+"	cbnz	%w1, 2b\n"
 	/* We got the lock. Critical section starts here. */
 "3:"
 	: "=&r" (lockval), "=&r" (newval), "=&r" (tmp), "+Q" (*lock)
 	: "Q" (lock->owner), "I" (1 << TICKET_SHIFT)
-	: "memory", "cc");
+	: "memory");
 }
 
 static inline int arch_spin_trylock(arch_spinlock_t *lock)

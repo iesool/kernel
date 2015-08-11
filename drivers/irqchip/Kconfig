@@ -26,7 +26,6 @@ config ARM_GIC_V3
 config ARM_GIC_V3_ITS
 	bool
 	select PCI_MSI_IRQ_DOMAIN
-	select IORT_TABLE if (ACPI && PCI_MSI)
 
 config ARM_NVIC
 	bool

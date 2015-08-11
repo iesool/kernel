@@ -11,7 +11,6 @@
  * for more details.
  */
 
-#include <linux/acpi.h>
 #include <linux/cpu.h>
 #include <linux/cpumask.h>
 #include <linux/init.h>
@@ -258,13 +257,6 @@ void store_cpu_topology(unsigned int cpuid)
 		cpuid_topo->core_id    = MPIDR_AFFINITY_LEVEL(mpidr, 1);
 		cpuid_topo->cluster_id = MPIDR_AFFINITY_LEVEL(mpidr, 2) |
 					 MPIDR_AFFINITY_LEVEL(mpidr, 3) << 8;
-#ifdef CONFIG_ACPI
-	} else if (!acpi_disabled) {
-		/* Multiprocessor system : Single-thread per core */
-		cpuid_topo->thread_id  = -1;
-		cpuid_topo->core_id    = (((mpidr >> 8) & 0xff) * 16) + (mpidr & 0xff);
-		cpuid_topo->cluster_id = (cpuid_topo->core_id) > 47 ? 1:0;
-#endif
 	} else {
 		/* Multiprocessor system : Single-thread per core */
 		cpuid_topo->thread_id  = -1;

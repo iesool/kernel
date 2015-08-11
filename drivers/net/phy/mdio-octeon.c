@@ -14,7 +14,6 @@
 #include <linux/gfp.h>
 #include <linux/phy.h>
 #include <linux/io.h>
-#include <linux/acpi.h>
 
 #ifdef CONFIG_CAVIUM_OCTEON_SOC
 #include <asm/octeon/octeon.h>
@@ -266,62 +265,6 @@ static int octeon_mdiobus_write(struct mii_bus *bus, int phy_id,
 	return 0;
 }
 
-#ifdef CONFIG_ACPI
-static acpi_status
-acpi_register_phy(acpi_handle handle, u32 lvl, void *context, void **rv)
-{
-	struct mii_bus *mdio = context;
-	struct acpi_device *adev;
-	struct phy_device *phy;
-	u32 phy_id;
-
-	if (acpi_bus_get_device(handle, &adev))
-		return AE_OK;
-
-	if (acpi_dev_prop_read_single(adev, "phy-channel", DEV_PROP_U32,
-					&phy_id))
-		return AE_OK;
-
-	phy = get_phy_device(mdio, phy_id, false);
-	if (!phy || IS_ERR(phy))
-		return AE_OK;
-
-	if (phy_device_register(phy))
-		phy_device_free(phy);
-
-	return AE_OK;
-}
-
-static int
-acpi_mdiobus_register(struct mii_bus *mdio)
-{
-	int i, ret;
-
-	/* Mask out all PHYs from auto probing. */
-	mdio->phy_mask = ~0;
-
-	/* Clear all the IRQ properties */
-	if (mdio->irq)
-		for (i = 0; i < PHY_MAX_ADDR; i++)
-			mdio->irq[i] = PHY_POLL;
-
-	/* Register the MDIO bus */
-	ret = mdiobus_register(mdio);
-	if (ret)
-		return ret;
-
-	acpi_walk_namespace(ACPI_TYPE_DEVICE, ACPI_HANDLE(mdio->parent), 1,
-			    acpi_register_phy, NULL, mdio, NULL);
-	return 0;
-}
-#else
-static int
-acpi_mdiobus_register(struct mii_bus *mdio)
-{
-	return 0;
-}
-#endif
-
 static int octeon_mdiobus_probe(struct platform_device *pdev)
 {
 	struct octeon_mdiobus *bus;
@@ -374,10 +317,7 @@ static int octeon_mdiobus_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, bus);
 
-	if (pdev->dev.of_node)
-		err = of_mdiobus_register(bus->mii_bus, pdev->dev.of_node);
-	else
-		err = acpi_mdiobus_register(bus->mii_bus);
+	err = of_mdiobus_register(bus->mii_bus, pdev->dev.of_node);
 	if (err)
 		goto fail_register;
 

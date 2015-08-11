@@ -217,7 +217,7 @@ static void tls_thread_flush(void)
 {
 	asm ("msr tpidr_el0, xzr");
 
-	if (is_a32_compat_task()) {
+	if (is_compat_task()) {
 		current->thread.tp_value = 0;
 
 		/*
@@ -261,7 +261,7 @@ int copy_thread(unsigned long clone_flags, unsigned long stack_start,
 	if (likely(!(p->flags & PF_KTHREAD))) {
 		*childregs = *current_pt_regs();
 		childregs->regs[0] = 0;
-		if (is_a32_compat_thread(task_thread_info(p))) {
+		if (is_compat_thread(task_thread_info(p))) {
 			if (stack_start)
 				childregs->compat_sp = stack_start;
 		} else {
@@ -302,12 +302,12 @@ static void tls_thread_switch(struct task_struct *next)
 {
 	unsigned long tpidr, tpidrro;
 
-	if (!is_a32_compat_task()) {
+	if (!is_compat_task()) {
 		asm("mrs %0, tpidr_el0" : "=r" (tpidr));
 		current->thread.tp_value = tpidr;
 	}
 
-	if (is_a32_compat_thread(task_thread_info(next))) {
+	if (is_compat_thread(task_thread_info(next))) {
 		tpidr = 0;
 		tpidrro = next->thread.tp_value;
 	} else {

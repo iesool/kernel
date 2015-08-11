@@ -33,7 +33,6 @@
 #include <linux/phy.h>
 #include <linux/marvell_phy.h>
 #include <linux/of.h>
-#include <linux/acpi.h>
 
 #include <linux/io.h>
 #include <asm/irq.h>
@@ -227,6 +226,20 @@ static int marvell_config_aneg(struct phy_device *phydev)
 }
 
 #ifdef CONFIG_OF_MDIO
+/*
+ * Set and/or override some configuration registers based on the
+ * marvell,reg-init property stored in the of_node for the phydev.
+ *
+ * marvell,reg-init = <reg-page reg mask value>,...;
+ *
+ * There may be one or more sets of <reg-page reg mask value>:
+ *
+ * reg-page: which register bank to use.
+ * reg: the register.
+ * mask: if non-zero, ANDed with existing register value.
+ * value: ORed with the masked value and written to the regiser.
+ *
+ */
 static int marvell_of_reg_init(struct phy_device *phydev)
 {
 	const __be32 *paddr;
@@ -292,99 +305,6 @@ static int marvell_of_reg_init(struct phy_device *phydev)
 	return 0;
 }
 #endif /* CONFIG_OF_MDIO */
-
-#ifdef CONFIG_ACPI
-static int marvell_acpi_reg_init(struct phy_device *phydev)
-{
-	const union acpi_object *items;
-	const union acpi_object *obj;
-	int len, i, saved_page, current_page, page_changed, ret;
-
-	ret = acpi_dev_get_property_array(ACPI_COMPANION(&phydev->dev),
-			"marvell,reg-init", ACPI_TYPE_ANY, &obj);
-	if (ret)
-		return 0;
-
-	saved_page = phy_read(phydev, MII_MARVELL_PHY_PAGE);
-	if (saved_page < 0)
-		return saved_page;
-	page_changed = 0;
-	current_page = saved_page;
-
-	items = obj->package.elements;
-	len = obj->package.count;
-	ret = 0;
-	for (i = 0; i < len - 3; i += 4) {
-		u16 reg_page = items[i].integer.value;
-		u16 reg = items[i + 1].integer.value;
-		u16 mask = items[i + 2].integer.value;
-		u16 val_bits = items[i + 3].integer.value;
-		int val;
-
-		if (reg_page != current_page) {
-			current_page = reg_page;
-			page_changed = 1;
-			ret = phy_write(phydev, MII_MARVELL_PHY_PAGE, reg_page);
-			if (ret < 0)
-				goto err;
-		}
-
-		val = 0;
-		if (mask) {
-			val = phy_read(phydev, reg);
-			if (val < 0) {
-				ret = val;
-				goto err;
-			}
-			val &= mask;
-		}
-		val |= val_bits;
-
-		ret = phy_write(phydev, reg, val);
-		if (ret < 0)
-			goto err;
-
-	}
-err:
-	if (page_changed) {
-		i = phy_write(phydev, MII_MARVELL_PHY_PAGE, saved_page);
-		if (ret == 0)
-			ret = i;
-	}
-	return ret;
-}
-#else
-static int marvell_acpi_reg_init(struct phy_device *phydev)
-{
-	return 0;
-}
-#endif /* CONFIG_ACPI */
-
-/*
- * Set and/or override some configuration registers based on the
- * marvell,reg-init property stored in the of_node for the phydev.
- *
- * marvell,reg-init = <reg-page reg mask value>,...;
- *
- * There may be one or more sets of <reg-page reg mask value>:
- *
- * reg-page: which register bank to use.
- * reg: the register.
- * mask: if non-zero, ANDed with existing register value.
- * value: ORed with the masked value and written to the regiser.
- *
- */
-static int marvell_reg_init(struct phy_device *phydev)
-{
-	int ret;
-
-	if (phydev->dev.of_node)
-		ret = marvell_of_reg_init(phydev);
-	else
-		ret = marvell_acpi_reg_init(phydev);
-
-	return ret;
-}
 
 static int m88e1121_config_aneg(struct phy_device *phydev)
 {
@@ -473,7 +393,7 @@ static int m88e1510_config_aneg(struct phy_device *phydev)
 	if (err < 0)
 		return err;
 
-	return marvell_reg_init(phydev);
+	return marvell_of_reg_init(phydev);
 }
 
 static int m88e1116r_config_init(struct phy_device *phydev)
@@ -638,7 +558,7 @@ static int m88e1111_config_init(struct phy_device *phydev)
 			return err;
 	}
 
-	err = marvell_reg_init(phydev);
+	err = marvell_of_reg_init(phydev);
 	if (err < 0)
 		return err;
 
@@ -689,7 +609,7 @@ static int m88e1118_config_init(struct phy_device *phydev)
 	if (err < 0)
 		return err;
 
-	err = marvell_reg_init(phydev);
+	err = marvell_of_reg_init(phydev);
 	if (err < 0)
 		return err;
 
@@ -715,7 +635,7 @@ static int m88e1149_config_init(struct phy_device *phydev)
 	if (err < 0)
 		return err;
 
-	err = marvell_reg_init(phydev);
+	err = marvell_of_reg_init(phydev);
 	if (err < 0)
 		return err;
 
@@ -801,7 +721,7 @@ static int m88e1145_config_init(struct phy_device *phydev)
 			return err;
 	}
 
-	err = marvell_reg_init(phydev);
+	err = marvell_of_reg_init(phydev);
 	if (err < 0)
 		return err;
 

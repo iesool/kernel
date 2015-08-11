@@ -6,7 +6,6 @@
  * as published by the Free Software Foundation.
  */
 
-#include <linux/acpi.h>
 #include <linux/module.h>
 #include <linux/interrupt.h>
 #include <linux/pci.h>
@@ -27,7 +26,7 @@
 struct lmac {
 	struct bgx		*bgx;
 	int			dmac;
-	u8			mac[ETH_ALEN];
+	unsigned char		mac[ETH_ALEN];
 	bool			link_up;
 	int			lmacid; /* ID within BGX */
 	int			lmacid_bd; /* ID on board */
@@ -833,125 +832,6 @@ static void bgx_get_qlm_mode(struct bgx *bgx)
 	}
 }
 
-#ifdef CONFIG_ACPI
-
-static int bgx_match_phy_id(struct device *dev, void *data)
-{
-	struct phy_device *phydev = to_phy_device(dev);
-	u32 *phy_id = data;
-
-	if (phydev->addr == *phy_id)
-		return 1;
-
-	return 0;
-}
-
-static const char *addr_propnames[] = {
-	"mac-address",
-	"local-mac-address",
-	"address",
-};
-
-static int acpi_get_mac_address(struct acpi_device *adev, u8 *dst)
-{
-	u64 mac;
-	int i;
-	int ret;
-
-	for (i = 0; i < ARRAY_SIZE(addr_propnames); i++) {
-		ret = acpi_dev_prop_read_single(adev, addr_propnames[i],
-						DEV_PROP_U64, &mac);
-		if (ret)
-			continue;
-
-		if (mac & (~0ULL << 48))
-			continue;	/* more than 6 bytes */
-
-		mac = cpu_to_be64(mac << 16);
-		if (!is_valid_ether_addr((u8 *)&mac))
-			continue;
-
-		ether_addr_copy(dst, (u8 *)&mac);
-
-		return 0;
-	}
-
-	return ret ? ret : -EINVAL;
-}
-
-static acpi_status bgx_acpi_register_phy(acpi_handle handle,
-					u32 lvl, void *context, void **rv)
-{
-	struct acpi_reference_args args;
-	struct bgx *bgx = context;
-	struct acpi_device *adev;
-	struct device *phy_dev;
-	u32 phy_id;
-
-	if (acpi_bus_get_device(handle, &adev))
-		return AE_OK;
-
-	if (acpi_dev_get_property_reference(adev, "phy-handle", 0, &args))
-		return AE_OK;
-
-	if (acpi_dev_prop_read_single(args.adev, "phy-channel", DEV_PROP_U32,
-					&phy_id))
-		return AE_OK;
-
-	phy_dev = bus_find_device(&mdio_bus_type, NULL, (void *)&phy_id,
-				  bgx_match_phy_id);
-	if (!phy_dev)
-		return AE_OK;
-
-	SET_NETDEV_DEV(&bgx->lmac[bgx->lmac_count].netdev, &bgx->pdev->dev);
-	bgx->lmac[bgx->lmac_count].phydev = to_phy_device(phy_dev);
-
-	acpi_get_mac_address(adev, bgx->lmac[bgx->lmac_count].mac);
-
-	bgx->lmac[bgx->lmac_count].lmacid = bgx->lmac_count;
-	bgx->lmac_count++;
-
-	return AE_OK;
-}
-
-static acpi_status bgx_acpi_match_id(acpi_handle handle, u32 lvl,
-				void *context, void **ret_val)
-{
-	struct acpi_buffer string = { ACPI_ALLOCATE_BUFFER, NULL };
-	struct bgx *bgx = context;
-	char bgx_sel[5];
-
-	snprintf(bgx_sel, 5, "BGX%d", bgx->bgx_id);
-	if (ACPI_FAILURE(acpi_get_name(handle, ACPI_SINGLE_NAME, &string))) {
-		pr_warn("Invalid link device\n");
-		return AE_OK;
-	}
-
-	if (strncmp(string.pointer, bgx_sel, 4))
-		return AE_OK;
-
-	acpi_walk_namespace(ACPI_TYPE_DEVICE, handle, 1,
-			    bgx_acpi_register_phy, NULL, bgx, NULL);
-
-	kfree(string.pointer);
-	return AE_CTRL_TERMINATE;
-}
-
-static int bgx_init_acpi_phy(struct bgx *bgx)
-{
-	acpi_get_devices(NULL, bgx_acpi_match_id, bgx, (void **)NULL);
-	return 0;
-}
-
-#else
-
-static int bgx_init_acpi_phy(struct bgx *bgx)
-{
-	return -ENODEV;
-}
-
-#endif /* CONFIG_ACPI */
-
 #if IS_ENABLED(CONFIG_OF_MDIO)
 
 static int bgx_init_of_phy(struct bgx *bgx)
@@ -999,12 +879,7 @@ static int bgx_init_of_phy(struct bgx *bgx)
 
 static int bgx_init_phy(struct bgx *bgx)
 {
-	int err = bgx_init_of_phy(bgx);
-
-	if (err != -ENODEV)
-		return err;
-
-	return bgx_init_acpi_phy(bgx);
+	return bgx_init_of_phy(bgx);
 }
 
 static int bgx_probe(struct pci_dev *pdev, const struct pci_device_id *ent)

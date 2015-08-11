@@ -69,7 +69,6 @@
 #define ACPI_SIG_DMAR           "DMAR"	/* DMA Remapping table */
 #define ACPI_SIG_HPET           "HPET"	/* High Precision Event Timer table */
 #define ACPI_SIG_IBFT           "IBFT"	/* iSCSI Boot Firmware Table */
-#define ACPI_SIG_IORT           "IORT"  /* IO Remapping table */
 #define ACPI_SIG_IVRS           "IVRS"	/* I/O Virtualization Reporting Structure */
 #define ACPI_SIG_LPIT           "LPIT"	/* Low Power Idle Table */
 #define ACPI_SIG_MCFG           "MCFG"	/* PCI Memory Mapped Configuration table */
@@ -647,98 +646,6 @@ struct acpi_ibft_target {
 	u16 reverse_chap_name_offset;
 	u16 reverse_chap_secret_length;
 	u16 reverse_chap_secret_offset;
-};
-
-/*******************************************************************************
- *
- * IORT - I/O Remapping Structure
- *
- ******************************************************************************/
-
-struct acpi_table_iort
-{
-	struct acpi_table_header	header;             /* Common ACPI table header */
-	u32				iort_nodes_number;
-
-};
-
-struct acpi_iort_header {
-	u8	type;
-	u16	length;
-	u8	revision;
-	u32	reserved;
-
-	u32	number_of_ids;
-	u32	ref_to_ids;
-};
-
-/* Values for IORT subtable type above */
-
-enum acpi_iort_type {
-	ACPI_IORT_TYPE_SMMU_V12 = 0,
-	ACPI_IORT_TYPE_SMMU_V3 = 1,
-	ACPI_IORT_TYPE_ITS_GROUP = 2,
-	ACPI_IORT_TYPE_NAMED_NODE = 3,
-	ACPI_IORT_TYPE_ROOT_COMPLEX = 4,
-	ACPI_IORT_TYPE_RESERVED = 5 /* 5 and greater are reserved */
-};
-
-struct acpi_iort_id {
-	u16	length;
-	u16	flags;
-	u32	input_base;
-	u32	output_base;
-	u32	output_ref;
-};
-
-#define IORT_ID_SINGLE_MAPPING	(1 << 0ULL)
-
-struct acpi_iort_smmu_v12 {
-	u64	base_address;
-	u64	span;
-	u32	model;
-	u32	flags;
-
-	u32	ref_glob_irq_array;
-	u32	context_irq_number;
-	u32	ref_context_irq_number;
-	u32	pmu_irq_number;
-	u32	ref_pmu_irq_number;
-
-	u32	smmu_nsg_irpt;
-	u32	smmu_nsg_irpt_flags;
-
-	u32	smmu_nsg_cfg_irpt;
-	u32	smmu_nsg_cfg_irpt_flags;
-};
-
-struct acpi_iort_smmu_v3 {
-	u64	base_address;
-	u64	span;
-	u32	model;
-	u32	event;
-	u32	event_flags;
-	u32	pri;
-	u32	pri_flags;
-	u32	gerr;
-	u32	gerr_flags;
-	u32	sync;
-	u32	sync_flags;
-};
-
-struct acpi_iort_its {
-	u32	number_of_its;
-	u32	its_id[1];
-};
-
-struct acpi_iort_named_component {
-	u32	coherency_attribute;
-	char	device_name[1];
-};
-
-struct acpi_iort_root_complex {
-	u32	ats_attribute;
-	u32	segment;
 };
 
 /*******************************************************************************

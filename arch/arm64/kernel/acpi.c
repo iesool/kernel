@@ -36,8 +36,6 @@ EXPORT_SYMBOL(acpi_disabled);
 int acpi_pci_disabled = 1;	/* skip ACPI PCI scan and IRQ initialization */
 EXPORT_SYMBOL(acpi_pci_disabled);
 
-int acpi_gic_ver;
-
 /* Processors with enabled flag and sane MPIDR */
 static int enabled_cpus;
 
@@ -321,27 +319,12 @@ void __init acpi_boot_table_init(void)
 	}
 }
 
-static int __init
-gic_acpi_find_ver(struct acpi_subtable_header *header,
-				const unsigned long end)
-{
-	struct acpi_madt_generic_distributor *dist;
-
-	dist = (struct acpi_madt_generic_distributor *)header;
-
-	if (BAD_MADT_ENTRY(dist, end))
-		return -EINVAL;
-
-	acpi_gic_ver = dist->gic_version;
-	return 0;
-}
-
 void __init acpi_gic_init(void)
 {
 	struct acpi_table_header *table;
 	acpi_status status;
 	acpi_size tbl_size;
-	int err, count;;
+	int err;
 
 	if (acpi_disabled)
 		return;
@@ -354,21 +337,9 @@ void __init acpi_gic_init(void)
 		return;
 	}
 
-	count = acpi_parse_entries(ACPI_SIG_MADT,
-				   sizeof(struct acpi_table_madt),
-				   gic_acpi_find_ver, table,
-				   ACPI_MADT_TYPE_GENERIC_DISTRIBUTOR, 0);
-	if (count <= 0) {
-		pr_info("Error during GICD entries parsing, assuming GICv2\n");
-		acpi_gic_ver = ACPI_MADT_GIC_VER_V2;
-	}
-
-	err = acpi_gic_ver < ACPI_MADT_GIC_VER_V3 ?
-			gic_v2_acpi_init(table) :
-			gic_v3_acpi_init(table);
+	err = gic_v2_acpi_init(table);
 	if (err)
 		pr_err("Failed to initialize GIC IRQ controller");
-
 
 	early_acpi_os_unmap_memory((char *)table, tbl_size);
 }

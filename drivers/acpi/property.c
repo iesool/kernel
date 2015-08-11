@@ -432,7 +432,6 @@ int acpi_dev_prop_read_single(struct acpi_device *adev, const char *propname,
 	}
 	return ret;
 }
-EXPORT_SYMBOL_GPL(acpi_dev_prop_read_single);
 
 static int acpi_copy_property_array_u8(const union acpi_object *items, u8 *val,
 				       size_t nval)

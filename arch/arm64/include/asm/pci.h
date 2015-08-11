@@ -27,50 +27,6 @@
 extern int isa_dma_bridge_buggy;
 
 #ifdef CONFIG_PCI
-
-#ifdef CONFIG_ACPI
-struct pci_controller {
-	struct acpi_device *companion;
-	int segment;
-	int node;		/* nearest node with memory or NUMA_NO_NODE for global allocation */
-};
-
-#define PCI_CONTROLLER(busdev) ((struct pci_controller *) busdev->sysdata)
-
-/*
- * ARM64 PCI config space access primitives.
- */
-static inline unsigned char mmio_config_readb(void __iomem *pos)
-{
-	return readb(pos);
-}
-
-static inline unsigned short mmio_config_readw(void __iomem *pos)
-{
-	return readw(pos);
-}
-
-static inline unsigned int mmio_config_readl(void __iomem *pos)
-{
-	return readl(pos);
-}
-
-static inline void mmio_config_writeb(void __iomem *pos, u8 val)
-{
-	writeb(val, pos);
-}
-
-static inline void mmio_config_writew(void __iomem *pos, u16 val)
-{
-	writew(val, pos);
-}
-
-static inline void mmio_config_writel(void __iomem *pos, u32 val)
-{
-	writel(val, pos);
-}
-#endif  /* CONFIG_ACPI */
-
 static inline int pci_get_legacy_ide_irq(struct pci_dev *dev, int channel)
 {
 	/* no legacy IRQ on arm64 */

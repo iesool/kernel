@@ -311,7 +311,7 @@ static void arch_timer_evtstrm_enable(int divider)
 			| ARCH_TIMER_VIRT_EVT_EN;
 	arch_timer_set_cntkctl(cntkctl);
 	elf_hwcap |= HWCAP_EVTSTRM;
-#ifdef CONFIG_AARCH32_EL0
+#ifdef CONFIG_COMPAT
 	compat_elf_hwcap |= COMPAT_HWCAP_EVTSTRM;
 #endif
 }
@@ -672,11 +672,10 @@ arch_timer_needs_probing(int type, const struct of_device_id *matches)
 	bool needs_probing = false;
 
 	dn = of_find_matching_node(NULL, matches);
-	if (dn) {
-		if (dn && of_device_is_available(dn) && !(arch_timers_present & type))
-			needs_probing = true;
-		of_node_put(dn);
-	}
+	if (dn && of_device_is_available(dn) && !(arch_timers_present & type))
+		needs_probing = true;
+	of_node_put(dn);
+
 	return needs_probing;
 }
 

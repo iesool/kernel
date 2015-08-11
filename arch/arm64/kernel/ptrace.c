@@ -37,7 +37,6 @@
 #include <linux/regset.h>
 #include <linux/tracehook.h>
 #include <linux/elf.h>
-#include <linux/errno.h>
 
 #include <asm/compat.h>
 #include <asm/debug-monitors.h>
@@ -77,10 +76,10 @@ static void ptrace_hbptriggered(struct perf_event *bp,
 		.si_addr	= (void __user *)(bkpt->trigger),
 	};
 
-#ifdef CONFIG_AARCH32_EL0
+#ifdef CONFIG_COMPAT
 	int i;
 
-	if (!is_a32_compat_task())
+	if (!is_compat_task())
 		goto send_sig;
 
 	for (i = 0; i < ARM_MAX_BRP; ++i) {
@@ -654,7 +653,6 @@ static const struct user_regset_view user_aarch64_view = {
 
 #ifdef CONFIG_COMPAT
 #include <linux/compat.h>
-#ifdef CONFIG_AARCH32_EL0
 
 enum compat_regset {
 	REGSET_COMPAT_GPR,
@@ -831,9 +829,9 @@ static int compat_vfp_set(struct task_struct *target,
 static const struct user_regset aarch32_regsets[] = {
 	[REGSET_COMPAT_GPR] = {
 		.core_note_type = NT_PRSTATUS,
-		.n = COMPAT_A32_ELF_NGREG,
-		.size = sizeof(compat_a32_elf_greg_t),
-		.align = sizeof(compat_a32_elf_greg_t),
+		.n = COMPAT_ELF_NGREG,
+		.size = sizeof(compat_elf_greg_t),
+		.align = sizeof(compat_elf_greg_t),
 		.get = compat_gpr_get,
 		.set = compat_gpr_set
 	},
@@ -866,7 +864,7 @@ static int compat_ptrace_read_user(struct task_struct *tsk, compat_ulong_t off,
 		tmp = tsk->mm->start_data;
 	else if (off == COMPAT_PT_TEXT_END_ADDR)
 		tmp = tsk->mm->end_code;
-	else if (off < sizeof(compat_a32_elf_gregset_t))
+	else if (off < sizeof(compat_elf_gregset_t))
 		return copy_regset_to_user(tsk, &user_aarch32_view,
 					   REGSET_COMPAT_GPR, off,
 					   sizeof(compat_ulong_t), ret);
@@ -887,7 +885,7 @@ static int compat_ptrace_write_user(struct task_struct *tsk, compat_ulong_t off,
 	if (off & 3 || off >= COMPAT_USER_SZ)
 		return -EIO;
 
-	if (off >= sizeof(compat_a32_elf_gregset_t))
+	if (off >= sizeof(compat_elf_gregset_t))
 		return 0;
 
 	set_fs(KERNEL_DS);
@@ -1029,8 +1027,8 @@ static int compat_ptrace_sethbpregs(struct task_struct *tsk, compat_long_t num,
 }
 #endif	/* CONFIG_HAVE_HW_BREAKPOINT */
 
-long compat_a32_arch_ptrace(struct task_struct *child, compat_long_t request,
-			    compat_ulong_t caddr, compat_ulong_t cdata)
+long compat_arch_ptrace(struct task_struct *child, compat_long_t request,
+			compat_ulong_t caddr, compat_ulong_t cdata)
 {
 	unsigned long addr = caddr;
 	unsigned long data = cdata;
@@ -1050,7 +1048,7 @@ long compat_a32_arch_ptrace(struct task_struct *child, compat_long_t request,
 			ret = copy_regset_to_user(child,
 						  &user_aarch32_view,
 						  REGSET_COMPAT_GPR,
-						  0, sizeof(compat_a32_elf_gregset_t),
+						  0, sizeof(compat_elf_gregset_t),
 						  datap);
 			break;
 
@@ -1058,7 +1056,7 @@ long compat_a32_arch_ptrace(struct task_struct *child, compat_long_t request,
 			ret = copy_regset_from_user(child,
 						    &user_aarch32_view,
 						    REGSET_COMPAT_GPR,
-						    0, sizeof(compat_a32_elf_gregset_t),
+						    0, sizeof(compat_elf_gregset_t),
 						    datap);
 			break;
 
@@ -1106,32 +1104,12 @@ long compat_a32_arch_ptrace(struct task_struct *child, compat_long_t request,
 
 	return ret;
 }
-#else /* !CONFIG_AARCH32_EL0 */
-long compat_a32_arch_ptrace(struct task_struct *child, compat_long_t request,
-			    compat_ulong_t caddr, compat_ulong_t cdata)
-{
-	return -EINVAL;
-}
-#endif /* !CONFIG_AARCH32_EL0 */
-
-/*
- * In ILP32, compat_arch_ptrace is used via the compat syscall, we don't need
- * to do anything special for ILP32 though; only for AARCH32.
- */
-long compat_arch_ptrace(struct task_struct *child, compat_long_t request,
-			compat_ulong_t caddr, compat_ulong_t cdata)
-{
-	if (is_a32_compat_task())
-		return compat_a32_arch_ptrace(child, request, caddr, cdata);
-	return compat_ptrace_request(child, request, caddr, cdata);
-}
-#endif
-
+#endif /* CONFIG_COMPAT */
 
 const struct user_regset_view *task_user_regset_view(struct task_struct *task)
 {
-#ifdef CONFIG_AARCH32_EL0
-	if (is_a32_compat_thread(task_thread_info(task)))
+#ifdef CONFIG_COMPAT
+	if (is_compat_thread(task_thread_info(task)))
 		return &user_aarch32_view;
 #endif
 	return &user_aarch64_view;
@@ -1158,7 +1136,7 @@ static void tracehook_report_syscall(struct pt_regs *regs,
 	 * A scratch register (ip(r12) on AArch32, x7 on AArch64) is
 	 * used to denote syscall entry/exit:
 	 */
-	regno = (is_a32_compat_task() ? 12 : 7);
+	regno = (is_compat_task() ? 12 : 7);
 	saved_reg = regs->regs[regno];
 	regs->regs[regno] = dir;
 

@@ -22,7 +22,6 @@
 #include <linux/slab.h>
 #include <linux/stat.h>
 #include <linux/vexpress.h>
-#include <linux/acpi.h>
 
 #define SYS_ID			0x000
 #define SYS_SW			0x004
@@ -48,121 +47,25 @@
 #define SYS_HBI_MASK		0xfff
 #define SYS_PROCIDx_HBI_SHIFT	0
 
-#define SYS_MCI_CARDIN		(1 << 0)
-#define SYS_MCI_WPROT		(1 << 1)
-
 #define SYS_MISC_MASTERSITE	(1 << 14)
-
-
-static void __iomem *__vexpress_sysreg_base;
-
-#ifdef CONFIG_ACPI
-static acpi_status check_vexpress_resource(struct acpi_resource *res,
-					   void *data)
-{
-	struct resource *vexpress_res = data;
-
-	if (!acpi_dev_resource_memory(res, vexpress_res))
-		pr_err("Failed to map vexpress memory resource\n");
-
-	__vexpress_sysreg_base = ioremap(vexpress_res->start,
-					resource_size(vexpress_res));
-	if (__vexpress_sysreg_base)
-		return AE_CTRL_TERMINATE;
-
-	return AE_OK;
-}
-
-static acpi_status find_vexpress_resource(acpi_handle handle, u32 lvl,
-					  void *context, void **rv)
-{
-	struct resource *vexpress_res = context;
-
-	acpi_walk_resources(handle, METHOD_NAME__CRS,
-			    check_vexpress_resource, context);
-
-	if (vexpress_res->flags)
-		return AE_CTRL_TERMINATE;
-
-	return AE_OK;
-}
-
-static void acpi_vexpress_sysreg_base(void)
-{
-	struct resource vexpress_res;
-
-	acpi_get_devices("LNRO0009", find_vexpress_resource, &vexpress_res,
-			 NULL);
-}
-#else
-static inline void acpi_vexpress_sysreg_base(void)
-{
-}
-#endif
-
-static void __iomem *vexpress_sysreg_base(void)
-{
-	struct device_node *node;
-
-	if (__vexpress_sysreg_base)
-		goto ret;
-
-	node = of_find_compatible_node(NULL, NULL, "arm,vexpress-sysreg");
-	if (node) {
-		__vexpress_sysreg_base = of_iomap(node, 0);
-		goto ret;
-	}
-
-	acpi_vexpress_sysreg_base();
-
-ret:
-	WARN_ON(!__vexpress_sysreg_base);
-
-	return __vexpress_sysreg_base;
-}
-
-
-static int vexpress_sysreg_get_master(void)
-{
-	if (readl(vexpress_sysreg_base() + SYS_MISC) & SYS_MISC_MASTERSITE)
-		return VEXPRESS_SITE_DB2;
-
-	return VEXPRESS_SITE_DB1;
-}
 
 void vexpress_flags_set(u32 data)
 {
-	writel(~0, vexpress_sysreg_base() + SYS_FLAGSCLR);
-	writel(data, vexpress_sysreg_base() + SYS_FLAGSSET);
+	static void __iomem *base;
+
+	if (!base) {
+		struct device_node *node = of_find_compatible_node(NULL, NULL,
+				"arm,vexpress-sysreg");
+
+		base = of_iomap(node, 0);
+	}
+
+	if (WARN_ON(!base))
+		return;
+
+	writel(~0, base + SYS_FLAGSCLR);
+	writel(data, base + SYS_FLAGSSET);
 }
-
-unsigned int vexpress_get_mci_cardin(struct device *dev)
-{
-	return readl(vexpress_sysreg_base() + SYS_MCI) & SYS_MCI_CARDIN;
-}
-
-u32 vexpress_get_procid(int site)
-{
-	if (site == VEXPRESS_SITE_MASTER)
-		site = vexpress_sysreg_get_master();
-
-	return readl(vexpress_sysreg_base() + (site == VEXPRESS_SITE_DB1 ?
-			SYS_PROCID0 : SYS_PROCID1));
-}
-
-void __iomem *vexpress_get_24mhz_clock_base(void)
-{
-	return vexpress_sysreg_base() + SYS_24MHZ;
-}
-
-
-void __init vexpress_sysreg_early_init(void __iomem *base)
-{
-	__vexpress_sysreg_base = base;
-
-	vexpress_config_set_master(vexpress_sysreg_get_master());
-}
-
 
 /* The sysreg block is just a random collection of various functions... */
 
@@ -262,6 +165,7 @@ static int vexpress_sysreg_probe(struct platform_device *pdev)
 	struct resource *mem;
 	void __iomem *base;
 	struct bgpio_chip *mmc_gpio_chip;
+	int master;
 	u32 dt_hbi;
 
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
@@ -272,11 +176,14 @@ static int vexpress_sysreg_probe(struct platform_device *pdev)
 	if (!base)
 		return -ENOMEM;
 
-	vexpress_config_set_master(vexpress_sysreg_get_master());
+	master = readl(base + SYS_MISC) & SYS_MISC_MASTERSITE ?
+			VEXPRESS_SITE_DB2 : VEXPRESS_SITE_DB1;
+	vexpress_config_set_master(master);
 
 	/* Confirm board type against DT property, if available */
 	if (of_property_read_u32(of_root, "arm,hbi", &dt_hbi) == 0) {
-		u32 id = vexpress_get_procid(VEXPRESS_SITE_MASTER);
+		u32 id = readl(base + (master == VEXPRESS_SITE_DB1 ?
+				 SYS_PROCID0 : SYS_PROCID1));
 		u32 hbi = (id >> SYS_PROCIDx_HBI_SHIFT) & SYS_HBI_MASK;
 
 		if (WARN_ON(dt_hbi != hbi))
@@ -307,18 +214,10 @@ static const struct of_device_id vexpress_sysreg_match[] = {
 	{},
 };
 
-#ifdef CONFIG_ACPI
-static const struct acpi_device_id vexpress_sysreg_acpi_match[] = {
-	{ "LNRO0009", },
-	{ }
-};
-#endif
-
 static struct platform_driver vexpress_sysreg_driver = {
 	.driver = {
 		.name = "vexpress-sysreg",
 		.of_match_table = vexpress_sysreg_match,
-		.acpi_match_table = ACPI_PTR(vexpress_sysreg_acpi_match),
 	},
 	.probe = vexpress_sysreg_probe,
 };

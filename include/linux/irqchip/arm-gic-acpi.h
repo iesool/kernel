@@ -18,15 +18,12 @@
  * from GIC spec.
  */
 #define ACPI_GICV2_DIST_MEM_SIZE	(SZ_4K)
-#define ACPI_GICV3_DIST_MEM_SIZE	(SZ_64K)
 #define ACPI_GIC_CPU_IF_MEM_SIZE	(SZ_8K)
 
 struct acpi_table_header;
 
 int gic_v2_acpi_init(struct acpi_table_header *table);
-int gic_v3_acpi_init(struct acpi_table_header *table);
 void acpi_gic_init(void);
-void its_acpi_probe(struct acpi_table_header *table);
 #else
 static inline void acpi_gic_init(void) { }
 #endif

@@ -22,12 +22,10 @@
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
-#include <linux/acpi.h>
 #include <linux/percpu.h>
 #include <linux/slab.h>
 
 #include <linux/irqchip/arm-gic-v3.h>
-#include <linux/irqchip/arm-gic-acpi.h>
 
 #include <asm/cputype.h>
 #include <asm/exception.h>
@@ -791,7 +789,6 @@ static void gic_irq_domain_free(struct irq_domain *domain, unsigned int virq,
 }
 
 static const struct irq_domain_ops gic_irq_domain_ops = {
-	.map = gic_irq_domain_map,
 	.xlate = gic_irq_domain_xlate,
 	.alloc = gic_irq_domain_alloc,
 	.free = gic_irq_domain_free,
@@ -820,23 +817,59 @@ static void gicv3_check_capabilities(void)
 	gic_check_capabilities(iidr, gicv3_errata, NULL);
 }
 
-static int __init gic_init_bases(void __iomem *dist_base,
-			    struct redist_region *rdist_regs,
-			    u32 nr_redist_regions,
-			    u64 redist_stride,
-			    struct device_node *node)
+static int __init gic_of_init(struct device_node *node, struct device_node *parent)
 {
+	void __iomem *dist_base;
+	struct redist_region *rdist_regs;
+	u64 redist_stride;
+	u32 nr_redist_regions;
 	u32 typer;
 	u32 reg;
 	int gic_irqs;
 	int err;
+	int i;
+
+	dist_base = of_iomap(node, 0);
+	if (!dist_base) {
+		pr_err("%s: unable to map gic dist registers\n",
+			node->full_name);
+		return -ENXIO;
+	}
 
 	reg = readl_relaxed(dist_base + GICD_PIDR2) & GIC_PIDR2_ARCH_MASK;
 	if (reg != GIC_PIDR2_ARCH_GICv3 && reg != GIC_PIDR2_ARCH_GICv4) {
 		pr_err("%s: no distributor detected, giving up\n",
 			node->full_name);
-		return -ENODEV;
+		err = -ENODEV;
+		goto out_unmap_dist;
 	}
+
+	if (of_property_read_u32(node, "#redistributor-regions", &nr_redist_regions))
+		nr_redist_regions = 1;
+
+	rdist_regs = kzalloc(sizeof(*rdist_regs) * nr_redist_regions, GFP_KERNEL);
+	if (!rdist_regs) {
+		err = -ENOMEM;
+		goto out_unmap_dist;
+	}
+
+	for (i = 0; i < nr_redist_regions; i++) {
+		struct resource res;
+		int ret;
+
+		ret = of_address_to_resource(node, 1 + i, &res);
+		rdist_regs[i].redist_base = of_iomap(node, 1 + i);
+		if (ret || !rdist_regs[i].redist_base) {
+			pr_err("%s: couldn't map region %d\n",
+			       node->full_name, i);
+			err = -ENODEV;
+			goto out_unmap_rdist;
+		}
+		rdist_regs[i].phys_base = res.start;
+	}
+
+	if (of_property_read_u64(node, "redistributor-stride", &redist_stride))
+		redist_stride = 0;
 
 	gic_data.dist_base = dist_base;
 	gic_data.redist_regions = rdist_regs;
@@ -868,7 +901,7 @@ static int __init gic_init_bases(void __iomem *dist_base,
 	set_handle_irq(gic_handle_irq);
 
 	if (IS_ENABLED(CONFIG_ARM_GIC_V3_ITS) && gic_dist_supports_lpis())
-		its_init(&gic_data.rdists, gic_data.domain);
+		its_init(node, &gic_data.rdists, gic_data.domain);
 
 	gic_smp_init();
 	gic_dist_init();
@@ -881,59 +914,6 @@ out_free:
 	if (gic_data.domain)
 		irq_domain_remove(gic_data.domain);
 	free_percpu(gic_data.rdists.rdist);
-	return err;
-}
-
-#ifdef CONFIG_OF
-static int __init gic_of_init(struct device_node *node, struct device_node *parent)
-{
-	void __iomem *dist_base;
-	struct redist_region *rdist_regs;
-	u64 redist_stride;
-	u32 nr_redist_regions;
-	int err, i;
-
-	dist_base = of_iomap(node, 0);
-	if (!dist_base) {
-		pr_err("%s: unable to map gic dist registers\n",
-			node->full_name);
-		return -ENXIO;
-	}
-
-	if (of_property_read_u32(node, "#redistributor-regions", &nr_redist_regions))
-		nr_redist_regions = 1;
-
-	rdist_regs = kzalloc(sizeof(*rdist_regs) * nr_redist_regions, GFP_KERNEL);
-	if (!rdist_regs) {
-		err = -ENOMEM;
-		goto out_unmap_dist;
-	}
-
-	for (i = 0; i < nr_redist_regions; i++) {
-		struct resource res;
-		int ret;
-
-		ret = of_address_to_resource(node, 1 + i, &res);
-		rdist_regs[i].redist_base = of_iomap(node, 1 + i);
-		if (ret || !rdist_regs[i].redist_base) {
-			pr_err("%s: couldn't map region %d\n",
-			       node->full_name, i);
-			err = -ENODEV;
-			goto out_unmap_rdist;
-		}
-		rdist_regs[i].phys_base = res.start;
-	}
-
-	if (of_property_read_u64(node, "redistributor-stride", &redist_stride))
-		redist_stride = 0;
-
-	its_of_probe(node);
-
-	err = gic_init_bases(dist_base, rdist_regs, nr_redist_regions,
-			     redist_stride, node);
-	if (!err)
-		return 0;
-
 out_unmap_rdist:
 	for (i = 0; i < nr_redist_regions; i++)
 		if (rdist_regs[i].redist_base)
@@ -945,214 +925,3 @@ out_unmap_dist:
 }
 
 IRQCHIP_DECLARE(gic_v3, "arm,gic-v3", gic_of_init);
-#endif
-
-#ifdef CONFIG_ACPI
-static struct redist_region *redist_regs;
-static u32 redist_regions;
-static void __iomem *dist_base;
-
-static void __iomem * __init
-gic_acpi_map_one_redist(u64 redist_base_address)
-{
-	void __iomem *redist_base;
-	u64 typer;
-	u32 reg;
-
-	/* Map RD + SGI pages */
-	redist_base = ioremap(redist_base_address, 2 * SZ_64K);
-	if (!redist_base)
-		return NULL;
-
-	/*
-	 * Map another two pages VLPI + reserved, if GIC support
-	 * virtual LPI.
-	 */
-	reg = readl_relaxed(redist_base + GICR_PIDR2) & GIC_PIDR2_ARCH_MASK;
-	if (reg != 0x30 && reg != 0x40) { /* We're in trouble... */
-		pr_warn("No redistributor present @%p\n", redist_base);
-		iounmap(redist_base);
-		return NULL;
-	}
-
-	typer = readq_relaxed(redist_base + GICR_TYPER);
-	if (typer & GICR_TYPER_VLPIS) {
-		iounmap(redist_base);
-		redist_base = ioremap(redist_base_address, 4 * SZ_64K);
-	}
-
-	return redist_base;
-}
-
-static int __init
-gic_acpi_register_redist(u64 redist_base_address, u64 size, int region)
-{
-	struct redist_region *redist_regs_new;
-	void __iomem *redist_base;
-
-	redist_regs_new = krealloc(redist_regs,
-				   sizeof(*redist_regs) * (redist_regions + 1),
-				   GFP_KERNEL);
-	if (!redist_regs_new) {
-		pr_err("Couldn't allocate resource for GICR region\n");
-		return -ENOMEM;
-	}
-
-	redist_regs = redist_regs_new;
-
-	/*
-	 * Region contains a distinct set of GIC redistributors. Region size
-	 * gives us all info we need to map redistributors properly.
-	 *
-	 * If it is not region, we assume to deal with one redistributor.
-	 * Redistributor size is probeable and depends on GIC version:
-	 * GICv3: RD + SGI pages
-	 * GICv4: RD + SGI + VLPI + reserved pages
-	 */
-	if (region)
-		redist_base = ioremap(redist_base_address, size);
-	else
-		redist_base = gic_acpi_map_one_redist(redist_base_address);
-
-	if (!redist_base) {
-		pr_err("Couldn't map GICR region @%lx\n",
-		       (long int)redist_base_address);
-		return -ENOMEM;
-	}
-
-	redist_regs[redist_regions].phys_base = redist_base_address;
-	redist_regs[redist_regions++].redist_base = redist_base;
-	return 0;
-}
-
-static int __init
-gic_acpi_parse_madt_cpu(struct acpi_subtable_header *header,
-			const unsigned long end)
-{
-	struct acpi_madt_generic_interrupt *processor;
-
-	if (BAD_MADT_ENTRY(header, end))
-		return -EINVAL;
-
-	processor = (struct acpi_madt_generic_interrupt *)header;
-	if (!processor->gicr_base_address)
-		return -EINVAL;
-
-	return gic_acpi_register_redist(processor->gicr_base_address, 0, 0);
-}
-
-static int __init
-gic_acpi_parse_madt_redist(struct acpi_subtable_header *header,
-			const unsigned long end)
-{
-	struct acpi_madt_generic_redistributor *redist;
-
-	if (BAD_MADT_ENTRY(header, end))
-		return -EINVAL;
-
-	redist = (struct acpi_madt_generic_redistributor *)header;
-	if (!redist->base_address)
-		return -EINVAL;
-
-	return gic_acpi_register_redist(redist->base_address,
-					redist->length, 1);
-}
-
-static int __init
-gic_acpi_parse_madt_distributor(struct acpi_subtable_header *header,
-				const unsigned long end)
-{
-	struct acpi_madt_generic_distributor *dist;
-
-	dist = (struct acpi_madt_generic_distributor *)header;
-
-	if (BAD_MADT_ENTRY(dist, end))
-		return -EINVAL;
-
-	dist_base = ioremap(dist->base_address, ACPI_GICV3_DIST_MEM_SIZE);
-	if (!dist_base) {
-		pr_err("Unable to map GICD registers\n");
-		return -ENOMEM;
-	}
-
-	return 0;
-}
-
-int __init
-gic_v3_acpi_init(struct acpi_table_header *table)
-{
-	int count, i, err = 0;
-
-	/* Collect redistributor base addresses */
-	count = acpi_parse_entries(ACPI_SIG_MADT,
-			sizeof(struct acpi_table_madt),
-			gic_acpi_parse_madt_redist, table,
-			ACPI_MADT_TYPE_GENERIC_REDISTRIBUTOR, 0);
-	if (!count)
-		pr_info("No valid GICR entries exist\n");
-	else if (count < 0) {
-		pr_err("Error during GICR entries parsing\n");
-		err = -EINVAL;
-		goto out_redist_unmap;
-	} else
-		goto madt_dist;
-
-	/*
-	 * There might be no GICR structure but we can still obtain
-	 * redistributor collection from GICC subtables.
-	 */
-	count = acpi_parse_entries(ACPI_SIG_MADT,
-			sizeof(struct acpi_table_madt),
-			gic_acpi_parse_madt_cpu, table,
-			ACPI_MADT_TYPE_GENERIC_INTERRUPT, 0);
-	if (!count) {
-		pr_info("No valid GICC entries exist\n");
-		return -EINVAL;
-	} else if (count < 0) {
-		pr_err("Error during GICC entries parsing\n");
-		err = -EINVAL;
-		goto out_redist_unmap;
-	}
-
-madt_dist:
-	/*
-	 * We assume to parse one distributor entry since ACPI 5.0 spec
-	 * neither support multi-GIC instances nor cascade.
-	 */
-	count = acpi_parse_entries(ACPI_SIG_MADT,
-				sizeof(struct acpi_table_madt),
-				gic_acpi_parse_madt_distributor, table,
-				ACPI_MADT_TYPE_GENERIC_DISTRIBUTOR, 0);
-	if (count < 0) {
-		pr_err("Error during GICD entries parsing\n");
-		err = -EINVAL;
-		goto out_redist_unmap;
-	} else if (!count) {
-		pr_err("No valid GICD entries exist\n");
-		err = -EINVAL;
-		goto out_redist_unmap;
-	} else if (count > 1) {
-		pr_err("More than one GICD entry detected\n");
-		err = -EINVAL;
-		goto out_redist_unmap;
-	}
-
-	its_acpi_probe(table);
-
-	err = gic_init_bases(dist_base, redist_regs, redist_regions, 0, NULL);
-	if (err)
-		goto out_dist_unmap;
-
-	irq_set_default_host(gic_data.domain);
-	return 0;
-
-out_dist_unmap:
-	iounmap(dist_base);
-out_redist_unmap:
-	for (i = 0; i < redist_regions; i++)
-		if (redist_regs[i].redist_base)
-			iounmap(redist_regs[i].redist_base);
-	kfree(redist_regs);
-	return err;
-}
-#endif

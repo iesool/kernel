@@ -21,17 +21,6 @@
 
 #include "irq-gic-common.h"
 
-void gic_check_capabilities(u32 iidr, const struct gic_capabilities *cap,
-			void *data)
-{
-	for (; cap->desc; cap++) {
-		if ((iidr & cap->mask) != cap->id)
-			continue;
-		cap->init(data);
-		pr_info("%s\n", cap->desc);
-	}
-}
-
 int gic_configure_irq(unsigned int irq, unsigned int type,
 		       void __iomem *base, void (*sync_access)(void))
 {

@@ -112,36 +112,12 @@ static void gic_redist_wait_for_rwp(void)
 }
 
 /* Low level accessors */
-static u64 gic_read_iar_common(void)
-{
-	u64 irqstat;
-
-	asm volatile("mrs_s %0, " __stringify(ICC_IAR1_EL1) : "=r" (irqstat));
-	return irqstat;
-}
-
-/* Cavium ThunderX erratum 23154 */
-static u64 gic_read_iar_cavium_thunderx(void)
-{
-	u64 irqstat;
-
-	asm volatile("nop;nop;nop;nop;");
-	asm volatile("nop;nop;nop;nop;");
-	asm volatile("mrs_s %0, " __stringify(ICC_IAR1_EL1) : "=r" (irqstat));
-	asm volatile("nop;nop;nop;nop;");
-	mb();
-
-	return irqstat;
-}
-
-struct static_key is_cavium_thunderx = STATIC_KEY_INIT_FALSE;
-
 static u64 __maybe_unused gic_read_iar(void)
 {
-	if (static_key_false(&is_cavium_thunderx))
-		return gic_read_iar_common();
-	else
-		return gic_read_iar_cavium_thunderx();
+	u64 irqstat;
+
+	asm volatile("mrs_s %0, " __stringify(ICC_IAR1_EL1) : "=r" (irqstat));
+	return irqstat;
 }
 
 static void __maybe_unused gic_write_pmr(u64 val)
@@ -794,29 +770,6 @@ static const struct irq_domain_ops gic_irq_domain_ops = {
 	.free = gic_irq_domain_free,
 };
 
-static void gicv3_enable_cavium_thunderx(void *data)
-{
-	static_key_slow_inc(&is_cavium_thunderx);
-}
-
-static const struct gic_capabilities gicv3_errata[] = {
-	{
-		.desc	= "GIC: Cavium erratum 23154",
-		.id	= 0xa100034c,	/* ThunderX pass 1.x */
-		.mask	= 0xffff0fff,
-		.init	= gicv3_enable_cavium_thunderx,
-	},
-	{
-	}
-};
-
-static void gicv3_check_capabilities(void)
-{
-	u32 iidr = readl_relaxed(gic_data.dist_base + GICD_IIDR);
-
-	gic_check_capabilities(iidr, gicv3_errata, NULL);
-}
-
 static int __init gic_of_init(struct device_node *node, struct device_node *parent)
 {
 	void __iomem *dist_base;
@@ -875,8 +828,6 @@ static int __init gic_of_init(struct device_node *node, struct device_node *pare
 	gic_data.redist_regions = rdist_regs;
 	gic_data.nr_redist_regions = nr_redist_regions;
 	gic_data.redist_stride = redist_stride;
-
-	gicv3_check_capabilities();
 
 	/*
 	 * Find out how many interrupts are supported.

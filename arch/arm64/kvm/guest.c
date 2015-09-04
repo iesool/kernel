@@ -293,7 +293,7 @@ int __attribute_const__ kvm_target_cpu(void)
 		break;
 	case ARM_CPU_IMP_CAVIUM:
 		switch (part_number) {
-		case ARM_CPU_PART_THUNDER:
+		case CAVIUM_CPU_PART_THUNDERX:
 			return KVM_ARM_TARGET_CAVIUM_THUNDER;
 		};
 		break;

@@ -412,6 +412,17 @@ config ARM64_ERRATUM_845719
 
 	  If unsure, say Y.
 
+config CAVIUM_ERRATUM_23154
+	bool "Cavium erratum 23154: Access to ICC_IAR1_EL1 is not sync'ed"
+	depends on ARCH_THUNDER
+	default y
+	help
+	  The gicv3 of ThunderX requires a modified version for
+	  reading the IAR status to ensure data synchronization
+	  (access to icc_iar1_el1 is not sync'ed before and after).
+
+	  If unsure, say Y.
+
 endmenu
 
 

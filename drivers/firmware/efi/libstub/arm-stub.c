@@ -268,9 +268,8 @@ unsigned long efi_entry(void *handle, efi_system_table_t *sys_table,
 
 	new_fdt_addr = fdt_addr;
 	status = allocate_new_fdt_and_exit_boot(sys_table, handle,
-				&new_fdt_addr, dram_base + MAX_FDT_OFFSET,
-				initrd_addr, initrd_size, cmdline_ptr,
-				fdt_addr, fdt_size);
+				&new_fdt_addr, initrd_addr, initrd_size,
+				cmdline_ptr, fdt_addr, fdt_size);
 
 	/*
 	 * If all went well, we need to return the FDT address to the

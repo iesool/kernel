@@ -20,10 +20,19 @@
 #include <linux/of.h>
 #include <linux/irqdomain.h>
 
+struct gic_capabilities {
+	const char *desc;
+	void (*init)(void *data);
+	u32 iidr;
+	u32 mask;
+};
+
 int gic_configure_irq(unsigned int irq, unsigned int type,
                        void __iomem *base, void (*sync_access)(void));
 void gic_dist_config(void __iomem *base, int gic_irqs,
 		     void (*sync_access)(void));
 void gic_cpu_config(void __iomem *base, void (*sync_access)(void));
+void gic_check_capabilities(u32 iidr, const struct gic_capabilities *cap,
+			void *data);
 
 #endif /* _IRQ_GIC_COMMON_H */

@@ -36,6 +36,7 @@
 #include <asm/cputype.h>
 #include <asm/exception.h>
 
+#include "irq-gic-common.h"
 #include "irqchip.h"
 
 #define ITS_FLAGS_CMDQ_NEEDS_FLUSHING		(1 << 0)
@@ -1441,6 +1442,18 @@ static int its_force_quiescent(void __iomem *base)
 	}
 }
 
+static const struct gic_capabilities its_errata[] = {
+	{
+	}
+};
+
+static void its_enable_quirks(struct its_node *its)
+{
+	u32 iidr = readl_relaxed(its->base + GITS_IIDR);
+
+	gic_check_capabilities(iidr, its_errata, its);
+}
+
 static int its_probe(struct device_node *node, struct irq_domain *parent)
 {
 	struct resource res;
@@ -1498,6 +1511,8 @@ static int its_probe(struct device_node *node, struct irq_domain *parent)
 		goto out_free_its;
 	}
 	its->cmd_write = its->cmd_base;
+
+	its_enable_quirks(its);
 
 	err = its_alloc_tables(its);
 	if (err)

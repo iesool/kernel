@@ -684,6 +684,7 @@ struct efi_fdt_params {
 	u32 mmap_size;
 	u32 desc_size;
 	u32 desc_ver;
+	bool verbose;
 };
 
 typedef struct {
@@ -886,7 +887,7 @@ extern void efi_initialize_iomem_resources(struct resource *code_resource,
 		struct resource *data_resource, struct resource *bss_resource);
 extern void efi_get_time(struct timespec *now);
 extern void efi_reserve_boot_services(void);
-extern int efi_get_fdt_params(struct efi_fdt_params *params, int verbose);
+extern bool efi_get_fdt_params(void *fdt, struct efi_fdt_params *params);
 extern struct efi_memory_map memmap;
 
 extern int efi_reboot_quirk_mode;

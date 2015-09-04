@@ -8,8 +8,7 @@
 
 #include <linux/init.h>
 #include <linux/efi.h>
-#include <linux/of.h>
-#include <linux/of_fdt.h>
+#include <linux/libfdt.h>
 
 #define UEFI_PARAM(name, prop, field)			   \
 	{						   \
@@ -32,62 +31,47 @@ static __initdata struct {
 	UEFI_PARAM("MemMap Desc. Version", "linux,uefi-mmap-desc-ver", desc_ver)
 };
 
-struct param_info {
-	int verbose;
-	int found;
-	void *params;
-};
-
-static int __init fdt_find_uefi_params(unsigned long node, const char *uname,
-				       int depth, void *data)
+bool __init efi_get_fdt_params(void *fdt, struct efi_fdt_params *params)
 {
-	struct param_info *info = data;
 	const void *prop;
-	void *dest;
-	u64 val;
-	int i, len;
-
-	if (depth != 1 || strcmp(uname, "chosen") != 0)
-		return 0;
-
-	for (i = 0; i < ARRAY_SIZE(dt_params); i++) {
-		prop = of_get_flat_dt_prop(node, dt_params[i].propname, &len);
-		if (!prop)
-			return 0;
-		dest = info->params + dt_params[i].offset;
-		info->found++;
-
-		val = of_read_number(prop, len / sizeof(u32));
-
-		if (dt_params[i].size == sizeof(u32))
-			*(u32 *)dest = val;
-		else
-			*(u64 *)dest = val;
-
-		if (info->verbose)
-			pr_info("  %s: 0x%0*llx\n", dt_params[i].name,
-				dt_params[i].size * 2, val);
-	}
-	return 1;
-}
-
-int __init efi_get_fdt_params(struct efi_fdt_params *params, int verbose)
-{
-	struct param_info info;
-	int ret;
+	int node, i;
 
 	pr_info("Getting EFI parameters from FDT:\n");
 
-	info.verbose = verbose;
-	info.found = 0;
-	info.params = params;
+	node = fdt_path_offset(fdt, "/chosen");
+	if (node < 0) {
+		pr_err("/chosen node not found!\n");
+		return false;
+	}
 
-	ret = of_scan_flat_dt(fdt_find_uefi_params, &info);
-	if (!info.found)
+	prop = fdt_getprop(fdt, node, "bootargs", NULL);
+	params->verbose = prop && strstr(prop, "uefi_debug");
+
+	for (i = 0; i < ARRAY_SIZE(dt_params); i++) {
+		void *dest;
+		int len;
+		u64 val;
+
+		prop = fdt_getprop(fdt, node, dt_params[i].propname, &len);
+		if (!prop)
+			goto not_found;
+		dest = (void *)params + dt_params[i].offset;
+
+		if (dt_params[i].size == sizeof(u32))
+			val = *(u32 *)dest = be32_to_cpup(prop);
+		else
+			val = *(u64 *)dest = be64_to_cpup(prop);
+
+		if (params->verbose)
+			pr_info("  %s: 0x%0*llx\n", dt_params[i].name,
+				dt_params[i].size * 2, val);
+	}
+	return true;
+
+not_found:
+	if (i == 0)
 		pr_info("UEFI not found.\n");
-	else if (!ret)
-		pr_err("Can't find '%s' in device tree!\n",
-		       dt_params[info.found].name);
-
-	return ret;
+	else
+		pr_err("Can't find '%s' in device tree!\n", dt_params[i].name);
+	return false;
 }

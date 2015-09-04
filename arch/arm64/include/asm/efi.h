@@ -5,9 +5,9 @@
 #include <asm/neon.h>
 
 #ifdef CONFIG_EFI
-extern void efi_init(void);
+extern void efi_init_fdt(void *fdt);
 #else
-#define efi_init()
+#define efi_init_fdt(x)
 #endif
 
 #define efi_call_virt(f, ...)						\

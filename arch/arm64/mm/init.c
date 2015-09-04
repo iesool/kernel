@@ -379,6 +379,16 @@ void __init early_init_dt_add_memory_arch(u64 base, u64 size)
 {
 	const u64 phys_offset = __pa(PAGE_OFFSET);
 
+	/*
+	 * This callback will be invoked both when booting via UEFI and when
+	 * booting via DT only. In the former case, we need to ignore memory
+	 * nodes in the DT since UEFI is authoritative when it comes to the
+	 * memory map. So ignore any invocations of this callback after
+	 * EFI_MEMMAP has been set.
+	 */
+	if (efi_enabled(EFI_MEMMAP))
+		return;
+
 	if (!PAGE_ALIGNED(base)) {
 		if (size < PAGE_SIZE - (base & ~PAGE_MASK)) {
 			pr_warn("Ignoring memory block 0x%llx - 0x%llx\n",

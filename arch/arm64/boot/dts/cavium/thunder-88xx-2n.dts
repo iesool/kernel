@@ -63,16 +63,15 @@
 
 	memory@00000000 {
 		device_type = "memory";
-		reg = <0x0 0x00000000 0x0 0x80000000>;
+		reg = <0x0 0x01400000 0x3 0xFEC00000>;
 		/* socket 0, no specific cluster, core */
 		arm,associativity = <0 0xffff 0xffff>;
 	};
 
 	memory@10000000000 {
 		device_type = "memory";
-		reg = <0x100 0x00000000 0x0 0x80000000>;
-		/* socket 1, no specific cluster, core */
+		reg = <0x100 0x00400000 0x3 0xFFC00000>;
+		 /*socket 1, no specific cluster, core */
 		arm,associativity = <1 0xffff 0xffff>;
 	};
-
 };

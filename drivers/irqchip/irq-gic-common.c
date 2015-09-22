@@ -21,14 +21,14 @@
 
 #include "irq-gic-common.h"
 
-void gic_check_capabilities(u32 iidr, const struct gic_capabilities *cap,
-			void *data)
+void gic_enable_quirks(u32 iidr, const struct gic_quirk *quirks,
+		void *data)
 {
-	for (; cap->desc; cap++) {
-		if (cap->iidr != (cap->mask & iidr))
+	for (; quirks->desc; quirks++) {
+		if (quirks->iidr != (quirks->mask & iidr))
 			continue;
-		cap->init(data);
-		pr_info("%s\n", cap->desc);
+		quirks->init(data);
+		pr_info("GIC: enabling workaround for %s\n", quirks->desc);
 	}
 }
 

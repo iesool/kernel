@@ -36,11 +36,12 @@
 #include <asm/cputype.h>
 #include <asm/exception.h>
 
-#include "irq-gic-common.h"
 #include "irqchip.h"
 
+#include "irq-gic-common.h"
+
 #define ITS_FLAGS_CMDQ_NEEDS_FLUSHING		(1ULL << 0)
-#define ITS_WORKAROUND_CAVIUM_22375            (1ULL << 1)
+#define ITS_FLAGS_WORKAROUND_CAVIUM_22375	(1ULL << 1)
 #define ITS_WORKAROUND_CAVIUM_23144            (1ULL << 2)
 
 #define RDIST_FLAGS_PROPBASE_NEEDS_FLUSHING	(1 << 0)
@@ -854,13 +855,13 @@ static int its_alloc_tables(struct its_node *its)
 	u64 typer;
 	u32 ids;
 
-	if (its->flags & ITS_WORKAROUND_CAVIUM_22375) {
+	if (its->flags & ITS_FLAGS_WORKAROUND_CAVIUM_22375) {
 		/*
 		 * erratum 22375: only alloc 8MB table size
 		 * erratum 24313: ignore memory access type
 		 */
 		cache	= 0;
-		ids	= 0x13;			/* 20 bits, 8MB */
+		ids	= 0x14;			/* 20 bits, 8MB */
 	} else {
 		cache	= GITS_BASER_WaWb;
 		typer	= readq_relaxed(its->base + GITS_TYPER);
@@ -1472,34 +1473,36 @@ static int its_force_quiescent(void __iomem *base)
 	}
 }
 
-static void its_enable_cavium_thunderx_22375(void *data)
+static void __maybe_unused its_enable_quirk_cavium_22375(void *data)
 {
 	struct its_node *its = data;
 
-	its->flags |= ITS_WORKAROUND_CAVIUM_22375;
+	its->flags |= ITS_FLAGS_WORKAROUND_CAVIUM_22375;
 }
 
 static void its_enable_cavium_thunderx_23144(void *data)
 {
-	struct its_node *its = data;
+       struct its_node *its = data;
 
-	if (num_possible_nodes() > 1)
-		its->flags |= ITS_WORKAROUND_CAVIUM_23144;
+       if (num_possible_nodes() > 1)
+               its->flags |= ITS_WORKAROUND_CAVIUM_23144;
 }
 
-static const struct gic_capabilities its_errata[] = {
+static const struct gic_quirk its_quirks[] = {
+#ifdef CONFIG_CAVIUM_ERRATUM_22375
 	{
 		.desc	= "ITS: Cavium errata 22375, 24313",
 		.iidr	= 0xa100034c,	/* ThunderX pass 1.x */
 		.mask	= 0xffff0fff,
-		.init	= its_enable_cavium_thunderx_22375,
+		.init	= its_enable_quirk_cavium_22375,
 	},
-	{
-		.desc	= "ITS: Cavium errata 23144",
-		.iidr	= 0xa100034c,	/* ThunderX pass 1.x */
-		.mask	= 0xffff0fff,
-		.init	= its_enable_cavium_thunderx_23144,
-	},
+       {
+               .desc   = "ITS: Cavium errata 23144",
+               .iidr   = 0xa100034c,   /* ThunderX pass 1.x */
+               .mask   = 0xffff0fff,
+               .init   = its_enable_cavium_thunderx_23144,
+       },
+#endif
 	{
 	}
 };
@@ -1508,7 +1511,7 @@ static void its_enable_quirks(struct its_node *its)
 {
 	u32 iidr = readl_relaxed(its->base + GITS_IIDR);
 
-	gic_check_capabilities(iidr, its_errata, its);
+	gic_enable_quirks(iidr, its_quirks, its);
 }
 
 static int its_probe(struct device_node *node, struct irq_domain *parent)

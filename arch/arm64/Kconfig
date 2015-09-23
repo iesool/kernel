@@ -451,6 +451,19 @@ config CAVIUM_ERRATUM_22375
 
 	  If unsure, say Y.
 
+config CAVIUM_ERRATUM_23144
+	bool "Cavium erratum 23144"
+	depends on NUMA
+	default y
+	help
+	  Enable workaround for erratum 23144.
+
+	  The erratum fixes the hang of ITS SYNC command by avoiding inter node
+	  io and collections/cpu mapping. This fix is only applicable for
+	  Cavium's ThunderX dual-socket platforms.
+
+	  If unsure, say Y.
+
 config CAVIUM_ERRATUM_23154
 	bool "Cavium erratum 23154: Access to ICC_IAR1_EL1 is not sync'ed"
 	default y

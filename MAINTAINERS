@@ -3763,6 +3763,13 @@ W:	bluesmoke.sourceforge.net
 S:	Maintained
 F:	drivers/edac/sb_edac.c
 
+EDAC-THUNDERX
+M:      David Daney <david.daney@cavium.com>
+L:      linux-edac@vger.kernel.org
+W:      bluesmoke.sourceforge.net
+S:      Supported
+F:      drivers/edac/thunderx_edac*
+
 EDAC-XGENE
 APPLIED MICRO (APM) X-GENE SOC EDAC
 M:     Loc Ho <lho@apm.com>

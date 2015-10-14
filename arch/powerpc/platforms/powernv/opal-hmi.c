@@ -103,6 +103,8 @@ static void hmi_event_handler(struct work_struct *work)
 	struct OpalHMIEvent *hmi_evt;
 	struct OpalHmiEvtNode *msg_node;
 	uint8_t disposition;
+	struct opal_msg msg;
+	int unrecoverable = 0;
 
 	spin_lock_irqsave(&opal_hmi_evt_lock, flags);
 	while (!list_empty(&opal_hmi_evt_list)) {
@@ -118,14 +120,53 @@ static void hmi_event_handler(struct work_struct *work)
 
 		/*
 		 * Check if HMI event has been recovered or not. If not
-		 * then we can't continue, invoke panic.
+		 * then kernel can't continue, we need to panic.
+		 * But before we do that, display all the HMI event
+		 * available on the list and set unrecoverable flag to 1.
 		 */
 		if (disposition != OpalHMI_DISPOSITION_RECOVERED)
-			panic("Unrecoverable HMI exception");
+			unrecoverable = 1;
 
 		spin_lock_irqsave(&opal_hmi_evt_lock, flags);
 	}
 	spin_unlock_irqrestore(&opal_hmi_evt_lock, flags);
+
+	if (unrecoverable) {
+		int ret;
+
+		/* Pull all HMI events from OPAL before we panic. */
+		while (opal_get_msg(__pa(&msg), sizeof(msg)) == OPAL_SUCCESS) {
+			u32 type;
+
+			type = be32_to_cpu(msg.msg_type);
+
+			/* skip if not HMI event */
+			if (type != OPAL_MSG_HMI_EVT)
+				continue;
+
+			/* HMI event info starts from param[0] */
+			hmi_evt = (struct OpalHMIEvent *)&msg.params[0];
+			print_hmi_event_info(hmi_evt);
+		}
+
+		/*
+		 * Unrecoverable HMI exception. We need to inform BMC/OCC
+		 * about this error so that it can collect relevant data
+		 * for error analysis before rebooting.
+		 */
+		ret = opal_cec_reboot2(OPAL_REBOOT_PLATFORM_ERROR,
+			"Unrecoverable HMI exception");
+		if (ret == OPAL_UNSUPPORTED) {
+			pr_emerg("Reboot type %d not supported\n",
+						OPAL_REBOOT_PLATFORM_ERROR);
+		}
+
+		/*
+		 * Fall through and panic if opal_cec_reboot2() returns
+		 * OPAL_UNSUPPORTED.
+		 */
+		panic("Unrecoverable HMI exception");
+	}
 }
 
 static DECLARE_WORK(hmi_event_work, hmi_event_handler);

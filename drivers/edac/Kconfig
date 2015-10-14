@@ -386,6 +386,14 @@ config EDAC_THUNDERX_LMC
 	  Support for error detection and correction on the Cavium
 	  ThunderX DRAM controller unit.
 
+config EDAC_THUNDERX_CCPI
+	tristate "Cavium ThunderX Cache Coherent Processor Interconnect"
+	depends on ARM64
+	depends on PCI
+	help
+	  Support for error detection and correction on the Cavium
+	  ThunderX Cache Coherent Processor Interconnect unit.
+
 config EDAC_ALTERA_MC
 	tristate "Altera SDRAM Memory Controller EDAC"
 	depends on EDAC_MM_EDAC && ARCH_SOCFPGA

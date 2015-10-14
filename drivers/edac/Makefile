@@ -66,7 +66,7 @@ obj-$(CONFIG_EDAC_OCTEON_L2C)		+= octeon_edac-l2c.o
 obj-$(CONFIG_EDAC_OCTEON_LMC)		+= octeon_edac-lmc.o
 obj-$(CONFIG_EDAC_OCTEON_PCI)		+= octeon_edac-pci.o
 obj-$(CONFIG_EDAC_THUNDERX_LMC)		+= thunderx_edac-lmc.o
-obj-$(CONFIG_EDAC_THUNDERX_CCPI)	+= thunderx_ccpi_edac.o
+obj-$(CONFIG_EDAC_THUNDERX_CCPI)	+= thunderx_edac-ccpi.o
 
 obj-$(CONFIG_EDAC_ALTERA_MC)		+= altera_edac.o
 obj-$(CONFIG_EDAC_SYNOPSYS)		+= synopsys_edac.o

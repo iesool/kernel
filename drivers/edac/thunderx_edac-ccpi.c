@@ -218,14 +218,18 @@ static int thunderx_ocx_probe(struct pci_dev *pdev,
 {
 	struct thunderx_ocx *ocx;
 	struct edac_device_ctl_info *edac_dev;
-	int err = 0, i;
+	char name[6];
+	int idx;
+	int i;
+	int err = -ENOMEM;
 
+	idx = edac_device_alloc_index();
+	snprintf(name, sizeof(name), "OCX%d", idx);
 	edac_dev = edac_device_alloc_ctl_info(sizeof(struct thunderx_ocx),
-					      "OCX", 1, "CCPI", 1, 0, NULL, 0,
-					      edac_device_alloc_index());
+					name, 1, "CCPI", 1, 0, NULL, 0, idx);
 	if (!edac_dev) {
 		dev_err(&pdev->dev, "Cannot allocate EDAC device: %d\n", err);
-		return -ENOMEM;
+		return err;
 	}
 
 	err = pcim_enable_device(pdev);

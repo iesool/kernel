@@ -346,6 +346,15 @@ static const struct pci_device_id thunderx_lmc_pci_tbl[] = {
 	{ 0, },
 };
 
+/*
+ * Per domain mappings (up to 4 domains):
+ *
+ *  domain 1: 0..3
+ *  domain 4: 4..7
+ */
+#define pci_dev_to_mc_idx(dev)	\
+	((pci_domain_nr((dev)->bus) & 6) | PCI_FUNC((dev)->devfn))
+
 static int thunderx_lmc_probe(struct pci_dev *pdev,
 				const struct pci_device_id *id)
 {
@@ -360,7 +369,7 @@ static int thunderx_lmc_probe(struct pci_dev *pdev,
 	layer.size = 2;
 	layer.is_virt_csrow = false;
 
-	mci = edac_mc_alloc(PCI_FUNC(pdev->devfn), 1, &layer,
+	mci = edac_mc_alloc(pci_dev_to_mc_idx(pdev), 1, &layer,
 			    sizeof(struct thunderx_lmc));
 	if (!mci)
 		return -ENOMEM;

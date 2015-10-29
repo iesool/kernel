@@ -4372,7 +4372,8 @@ void hsw_disable_ips(struct intel_crtc *crtc)
 	if (!crtc->config->ips_enabled)
 		return;
 
-	assert_plane_enabled(dev_priv, crtc->plane);
+	/* disable assert as it's too annoying (boo#951738) */
+	/* assert_plane_enabled(dev_priv, crtc->plane); */
 	if (IS_BROADWELL(dev)) {
 		mutex_lock(&dev_priv->rps.hw_lock);
 		WARN_ON(sandybridge_pcode_write(dev_priv, DISPLAY_IPS_CONTROL, 0));

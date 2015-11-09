@@ -446,8 +446,10 @@ static int __init numa_register_memblks(struct numa_meminfo *mi)
 	/* Account for nodes with cpus and no memory */
 	node_possible_map = numa_nodes_parsed;
 	numa_nodemask_from_meminfo(&node_possible_map, mi);
-	if (WARN_ON(nodes_empty(node_possible_map)))
+	if (nodes_empty(node_possible_map)) {
+		pr_warn("no node_possible_map found!");
 		return -EINVAL;
+	}
 
 	for (i = 0; i < mi->nr_blks; i++) {
 		struct numa_memblk *mb = &mi->blk[i];

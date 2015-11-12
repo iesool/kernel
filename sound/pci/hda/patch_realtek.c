@@ -3586,6 +3586,7 @@ static void alc_headset_mode_unplugged(struct hda_codec *codec)
 		break;
 	case 0x10ec0286:
 	case 0x10ec0288:
+	case 0x10ec0298:
 		alc_process_coef_fw(codec, coef0288);
 		break;
 	case 0x10ec0292:
@@ -3660,6 +3661,7 @@ static void alc_headset_mode_mic_in(struct hda_codec *codec, hda_nid_t hp_pin,
 		break;
 	case 0x10ec0286:
 	case 0x10ec0288:
+	case 0x10ec0298:
 		alc_update_coef_idx(codec, 0x4f, 0x000c, 0);
 		snd_hda_set_pin_ctl_cache(codec, hp_pin, 0);
 		alc_process_coef_fw(codec, coef0288);
@@ -3743,6 +3745,7 @@ static void alc_headset_mode_default(struct hda_codec *codec)
 		break;
 	case 0x10ec0286:
 	case 0x10ec0288:
+	case 0x10ec0298:
 		alc_process_coef_fw(codec, coef0288);
 		break;
 	case 0x10ec0292:
@@ -3807,6 +3810,9 @@ static void alc_headset_mode_ctia(struct hda_codec *codec)
 	case 0x10ec0283:
 		alc_process_coef_fw(codec, coef0233);
 		break;
+	case 0x10ec0298:
+		alc_update_coef_idx(codec, 0x8e, 0x0070, 0x0020);/* Headset output enable */
+		/* ALC298 jack type setting is the same with ALC286/ALC288 */
 	case 0x10ec0286:
 	case 0x10ec0288:
 		alc_update_coef_idx(codec, 0x4f, 0xfcc0, 0xd400);
@@ -3875,6 +3881,9 @@ static void alc_headset_mode_omtp(struct hda_codec *codec)
 	case 0x10ec0283:
 		alc_process_coef_fw(codec, coef0233);
 		break;
+	case 0x10ec0298:
+		alc_update_coef_idx(codec, 0x8e, 0x0070, 0x0010);/* Headset output enable */
+		/* ALC298 jack type setting is the same with ALC286/ALC288 */
 	case 0x10ec0286:
 	case 0x10ec0288:
 		alc_update_coef_idx(codec, 0x4f, 0xfcc0, 0xe400);
@@ -3937,6 +3946,9 @@ static void alc_determine_headset_type(struct hda_codec *codec)
 		val = alc_read_coef_idx(codec, 0x46);
 		is_ctia = (val & 0x0070) == 0x0070;
 		break;
+	case 0x10ec0298:
+		alc_update_coef_idx(codec, 0x8e, 0x0070, 0x0020); /* Headset output enable */
+		/* ALC298 check jack type is the same with ALC286/ALC288 */
 	case 0x10ec0286:
 	case 0x10ec0288:
 		alc_process_coef_fw(codec, coef0288);
@@ -4453,6 +4465,55 @@ static void alc290_fixup_mono_speakers(struct hda_codec *codec,
 	}
 }
 
+/* Hook to update amp GPIO4 for automute */
+static void alc280_hp_gpio4_automute_hook(struct hda_codec *codec,
+					  struct hda_jack_callback *jack)
+{
+	struct alc_spec *spec = codec->spec;
+
+	snd_hda_gen_hp_automute(codec, jack);
+	/* mute_led_polarity is set to 0, so we pass inverted value here */
+	alc_update_gpio_led(codec, 0x10, !spec->gen.hp_jack_present);
+}
+
+/* Manage GPIOs for HP EliteBook Folio 9480m.
+ *
+ * GPIO4 is the headphone amplifier power control
+ * GPIO3 is the audio output mute indicator LED
+ */
+
+static void alc280_fixup_hp_9480m(struct hda_codec *codec,
+				  const struct hda_fixup *fix,
+				  int action)
+{
+	struct alc_spec *spec = codec->spec;
+	static const struct hda_verb gpio_init[] = {
+		{ 0x01, AC_VERB_SET_GPIO_MASK, 0x18 },
+		{ 0x01, AC_VERB_SET_GPIO_DIRECTION, 0x18 },
+		{}
+	};
+
+	if (action == HDA_FIXUP_ACT_PRE_PROBE) {
+		/* Set the hooks to turn the headphone amp on/off
+		 * as needed
+		 */
+		spec->gen.vmaster_mute.hook = alc_fixup_gpio_mute_hook;
+		spec->gen.hp_automute_hook = alc280_hp_gpio4_automute_hook;
+
+		/* The GPIOs are currently off */
+		spec->gpio_led = 0;
+
+		/* GPIO3 is connected to the output mute LED,
+		 * high is on, low is off
+		 */
+		spec->mute_led_polarity = 0;
+		spec->gpio_mute_led_mask = 0x08;
+
+		/* Initialize GPIO configuration */
+		snd_hda_add_verbs(codec, gpio_init);
+	}
+}
+
 /* for hda_fixup_thinkpad_acpi() */
 #include "thinkpad_helper.c"
 
@@ -4532,6 +4593,7 @@ enum {
 	ALC286_FIXUP_HP_GPIO_LED,
 	ALC280_FIXUP_HP_GPIO2_MIC_HOTKEY,
 	ALC280_FIXUP_HP_DOCK_PINS,
+	ALC280_FIXUP_HP_9480M,
 	ALC288_FIXUP_DELL_HEADSET_MODE,
 	ALC288_FIXUP_DELL1_MIC_NO_PRESENCE,
 	ALC288_FIXUP_DELL_XPS_13_GPIO6,
@@ -4539,6 +4601,8 @@ enum {
 	ALC288_FIXUP_DISABLE_AAMIX,
 	ALC292_FIXUP_DELL_E7X,
 	ALC292_FIXUP_DISABLE_AAMIX,
+	ALC298_FIXUP_DELL1_MIC_NO_PRESENCE,
+	ALC275_FIXUP_DELL_XPS,
 };
 
 static const struct hda_fixup alc269_fixups[] = {
@@ -5043,6 +5107,10 @@ static const struct hda_fixup alc269_fixups[] = {
 		.chained = true,
 		.chain_id = ALC280_FIXUP_HP_GPIO4
 	},
+	[ALC280_FIXUP_HP_9480M] = {
+		.type = HDA_FIXUP_FUNC,
+		.v.func = alc280_fixup_hp_9480m,
+	},
 	[ALC288_FIXUP_DELL_HEADSET_MODE] = {
 		.type = HDA_FIXUP_FUNC,
 		.v.func = alc_fixup_headset_mode_dell_alc288,
@@ -5094,6 +5162,27 @@ static const struct hda_fixup alc269_fixups[] = {
 		.chained = true,
 		.chain_id = ALC292_FIXUP_DISABLE_AAMIX
 	},
+	[ALC298_FIXUP_DELL1_MIC_NO_PRESENCE] = {
+		.type = HDA_FIXUP_PINS,
+		.v.pins = (const struct hda_pintbl[]) {
+			{ 0x18, 0x01a1913c }, /* use as headset mic, without its own jack detect */
+			{ 0x1a, 0x01a1913d }, /* use as headphone mic, without its own jack detect */
+			{ }
+		},
+		.chained = true,
+		.chain_id = ALC269_FIXUP_HEADSET_MODE
+	},
+	[ALC275_FIXUP_DELL_XPS] = {
+		.type = HDA_FIXUP_VERBS,
+		.v.verbs = (const struct hda_verb[]) {
+			/* Enables internal speaker */
+			{0x20, AC_VERB_SET_COEF_INDEX, 0x1f},
+			{0x20, AC_VERB_SET_PROC_COEF, 0x00c0},
+			{0x20, AC_VERB_SET_COEF_INDEX, 0x30},
+			{0x20, AC_VERB_SET_PROC_COEF, 0x00b1},
+			{}
+		}
+	},
 };
 
 static const struct snd_pci_quirk alc269_fixup_tbl[] = {
@@ -5108,6 +5197,7 @@ static const struct snd_pci_quirk alc269_fixup_tbl[] = {
 	SND_PCI_QUIRK(0x1025, 0x0775, "Acer Aspire E1-572", ALC271_FIXUP_HP_GATE_MIC_JACK_E1_572),
 	SND_PCI_QUIRK(0x1025, 0x079b, "Acer Aspire V5-573G", ALC282_FIXUP_ASPIRE_V5_PINS),
 	SND_PCI_QUIRK(0x1028, 0x0470, "Dell M101z", ALC269_FIXUP_DELL_M101Z),
+	SND_PCI_QUIRK(0x1028, 0x054b, "Dell XPS one 2710", ALC275_FIXUP_DELL_XPS),
 	SND_PCI_QUIRK(0x1028, 0x05ca, "Dell Latitude E7240", ALC292_FIXUP_DELL_E7X),
 	SND_PCI_QUIRK(0x1028, 0x05cb, "Dell Latitude E7440", ALC292_FIXUP_DELL_E7X),
 	SND_PCI_QUIRK(0x1028, 0x05da, "Dell Vostro 5460", ALC290_FIXUP_SUBWOOFER),
@@ -5157,6 +5247,7 @@ static const struct snd_pci_quirk alc269_fixup_tbl[] = {
 	SND_PCI_QUIRK(0x103c, 0x22b7, "HP", ALC269_FIXUP_HP_MUTE_LED_MIC1),
 	SND_PCI_QUIRK(0x103c, 0x22bf, "HP", ALC269_FIXUP_HP_MUTE_LED_MIC1),
 	SND_PCI_QUIRK(0x103c, 0x22cf, "HP", ALC269_FIXUP_HP_MUTE_LED_MIC1),
+	SND_PCI_QUIRK(0x103c, 0x22db, "HP", ALC280_FIXUP_HP_9480M),
 	SND_PCI_QUIRK(0x103c, 0x22dc, "HP", ALC269_FIXUP_HP_GPIO_MIC1_LED),
 	SND_PCI_QUIRK(0x103c, 0x22fb, "HP", ALC269_FIXUP_HP_GPIO_MIC1_LED),
 	/* ALC290 */
@@ -5230,6 +5321,7 @@ static const struct snd_pci_quirk alc269_fixup_tbl[] = {
 	SND_PCI_QUIRK(0x17aa, 0x220c, "Thinkpad T440s", ALC292_FIXUP_TPT440_DOCK),
 	SND_PCI_QUIRK(0x17aa, 0x220e, "Thinkpad T440p", ALC292_FIXUP_TPT440_DOCK),
 	SND_PCI_QUIRK(0x17aa, 0x2210, "Thinkpad T540p", ALC292_FIXUP_TPT440_DOCK),
+	SND_PCI_QUIRK(0x17aa, 0x2211, "Thinkpad W541", ALC292_FIXUP_TPT440_DOCK),
 	SND_PCI_QUIRK(0x17aa, 0x2212, "Thinkpad T440", ALC292_FIXUP_TPT440_DOCK),
 	SND_PCI_QUIRK(0x17aa, 0x2214, "Thinkpad X240", ALC292_FIXUP_TPT440_DOCK),
 	SND_PCI_QUIRK(0x17aa, 0x2215, "Thinkpad", ALC269_FIXUP_LIMIT_INT_MIC_BOOST),
@@ -5325,344 +5417,202 @@ static const struct hda_model_fixup alc269_fixup_models[] = {
 	{}
 };
 
-#define ALC255_STANDARD_PINS \
-	{0x18, 0x411111f0}, \
-	{0x19, 0x411111f0}, \
-	{0x1a, 0x411111f0}, \
-	{0x1b, 0x411111f0}, \
-	{0x1e, 0x411111f0}
-
 #define ALC256_STANDARD_PINS \
 	{0x12, 0x90a60140}, \
 	{0x14, 0x90170110}, \
-	{0x19, 0x411111f0}, \
-	{0x1a, 0x411111f0}, \
-	{0x1b, 0x411111f0}, \
-	{0x1d, 0x40700001}, \
-	{0x1e, 0x411111f0}, \
 	{0x21, 0x02211020}
 
 #define ALC282_STANDARD_PINS \
-	{0x14, 0x90170110}, \
-	{0x18, 0x411111f0}, \
-	{0x1a, 0x411111f0}, \
-	{0x1b, 0x411111f0}, \
-	{0x1e, 0x411111f0}
-
-#define ALC288_STANDARD_PINS \
-	{0x17, 0x411111f0}, \
-	{0x18, 0x411111f0}, \
-	{0x19, 0x411111f0}, \
-	{0x1a, 0x411111f0}, \
-	{0x1e, 0x411111f0}
+	{0x14, 0x90170110}
 
 #define ALC290_STANDARD_PINS \
-	{0x12, 0x99a30130}, \
-	{0x13, 0x40000000}, \
-	{0x16, 0x411111f0}, \
-	{0x17, 0x411111f0}, \
-	{0x19, 0x411111f0}, \
-	{0x1b, 0x411111f0}, \
-	{0x1e, 0x411111f0}
+	{0x12, 0x99a30130}
 
 #define ALC292_STANDARD_PINS \
 	{0x14, 0x90170110}, \
-	{0x15, 0x0221401f}, \
-	{0x1a, 0x411111f0}, \
-	{0x1b, 0x411111f0}, \
-	{0x1d, 0x40700001}, \
-	{0x1e, 0x411111f0}
+	{0x15, 0x0221401f}
+
+#define ALC298_STANDARD_PINS \
+	{0x12, 0x90a60130}, \
+	{0x21, 0x03211020}
 
 static const struct snd_hda_pin_quirk alc269_pin_fixup_tbl[] = {
 	SND_HDA_PIN_QUIRK(0x10ec0255, 0x1028, "Dell", ALC255_FIXUP_DELL2_MIC_NO_PRESENCE,
-		ALC255_STANDARD_PINS,
-		{0x12, 0x40300000},
 		{0x14, 0x90170110},
-		{0x17, 0x411111f0},
-		{0x1d, 0x40538029},
 		{0x21, 0x02211020}),
 	SND_HDA_PIN_QUIRK(0x10ec0255, 0x1028, "Dell", ALC255_FIXUP_DELL1_MIC_NO_PRESENCE,
-		ALC255_STANDARD_PINS,
 		{0x12, 0x90a60140},
 		{0x14, 0x90170110},
-		{0x17, 0x40000000},
-		{0x1d, 0x40700001},
 		{0x21, 0x02211020}),
 	SND_HDA_PIN_QUIRK(0x10ec0255, 0x1028, "Dell", ALC255_FIXUP_DELL1_MIC_NO_PRESENCE,
-		ALC255_STANDARD_PINS,
 		{0x12, 0x90a60160},
 		{0x14, 0x90170120},
-		{0x17, 0x40000000},
-		{0x1d, 0x40700001},
 		{0x21, 0x02211030}),
 	SND_HDA_PIN_QUIRK(0x10ec0255, 0x1028, "Dell", ALC255_FIXUP_DELL1_MIC_NO_PRESENCE,
-		{0x12, 0x40000000},
 		{0x14, 0x90170130},
-		{0x17, 0x411111f0},
-		{0x18, 0x411111f0},
-		{0x19, 0x411111f0},
-		{0x1a, 0x411111f0},
 		{0x1b, 0x01014020},
-		{0x1d, 0x4054c029},
-		{0x1e, 0x411111f0},
 		{0x21, 0x0221103f}),
+	SND_HDA_PIN_QUIRK(0x10ec0255, 0x1028, "Dell", ALC255_FIXUP_DELL1_MIC_NO_PRESENCE,
+		{0x14, 0x90170150},
+		{0x1b, 0x02011020},
+		{0x21, 0x0221105f}),
+	SND_HDA_PIN_QUIRK(0x10ec0255, 0x1028, "Dell", ALC255_FIXUP_DELL1_MIC_NO_PRESENCE,
+		{0x14, 0x90170110},
+		{0x1b, 0x01014020},
+		{0x21, 0x0221101f}),
 	SND_HDA_PIN_QUIRK(0x10ec0255, 0x1028, "Dell", ALC255_FIXUP_DELL1_MIC_NO_PRESENCE,
 		{0x12, 0x90a60160},
 		{0x14, 0x90170120},
 		{0x17, 0x90170140},
-		{0x18, 0x40000000},
-		{0x19, 0x411111f0},
-		{0x1a, 0x411111f0},
-		{0x1b, 0x411111f0},
-		{0x1d, 0x41163b05},
-		{0x1e, 0x411111f0},
 		{0x21, 0x0321102f}),
 	SND_HDA_PIN_QUIRK(0x10ec0255, 0x1028, "Dell", ALC255_FIXUP_DELL1_MIC_NO_PRESENCE,
-		ALC255_STANDARD_PINS,
 		{0x12, 0x90a60160},
 		{0x14, 0x90170130},
-		{0x17, 0x40000000},
-		{0x1d, 0x40700001},
 		{0x21, 0x02211040}),
 	SND_HDA_PIN_QUIRK(0x10ec0255, 0x1028, "Dell", ALC255_FIXUP_DELL1_MIC_NO_PRESENCE,
-		ALC255_STANDARD_PINS,
 		{0x12, 0x90a60160},
 		{0x14, 0x90170140},
-		{0x17, 0x40000000},
-		{0x1d, 0x40700001},
 		{0x21, 0x02211050}),
 	SND_HDA_PIN_QUIRK(0x10ec0255, 0x1028, "Dell", ALC255_FIXUP_DELL1_MIC_NO_PRESENCE,
-		ALC255_STANDARD_PINS,
 		{0x12, 0x90a60170},
 		{0x14, 0x90170120},
-		{0x17, 0x40000000},
-		{0x1d, 0x40700001},
 		{0x21, 0x02211030}),
 	SND_HDA_PIN_QUIRK(0x10ec0255, 0x1028, "Dell", ALC255_FIXUP_DELL1_MIC_NO_PRESENCE,
-		ALC255_STANDARD_PINS,
 		{0x12, 0x90a60170},
 		{0x14, 0x90170130},
-		{0x17, 0x40000000},
-		{0x1d, 0x40700001},
 		{0x21, 0x02211040}),
 	SND_HDA_PIN_QUIRK(0x10ec0255, 0x1028, "Dell", ALC255_FIXUP_DELL1_MIC_NO_PRESENCE,
-		ALC255_STANDARD_PINS,
 		{0x12, 0x90a60170},
 		{0x14, 0x90170140},
-		{0x17, 0x40000000},
-		{0x1d, 0x40700001},
 		{0x21, 0x02211050}),
 	SND_HDA_PIN_QUIRK(0x10ec0255, 0x1028, "Dell Inspiron 5548", ALC255_FIXUP_DELL1_MIC_NO_PRESENCE,
-		ALC255_STANDARD_PINS,
 		{0x12, 0x90a60180},
 		{0x14, 0x90170130},
-		{0x17, 0x40000000},
-		{0x1d, 0x40700001},
 		{0x21, 0x02211040}),
 	SND_HDA_PIN_QUIRK(0x10ec0256, 0x1028, "Dell", ALC255_FIXUP_DELL1_MIC_NO_PRESENCE,
-		ALC255_STANDARD_PINS,
 		{0x12, 0x90a60160},
 		{0x14, 0x90170120},
-		{0x17, 0x40000000},
-		{0x1d, 0x40700001},
 		{0x21, 0x02211030}),
 	SND_HDA_PIN_QUIRK(0x10ec0256, 0x1028, "Dell", ALC255_FIXUP_DELL1_MIC_NO_PRESENCE,
-		ALC256_STANDARD_PINS,
-		{0x13, 0x40000000}),
-	SND_HDA_PIN_QUIRK(0x10ec0256, 0x1028, "Dell", ALC255_FIXUP_DELL1_MIC_NO_PRESENCE,
-		ALC256_STANDARD_PINS,
-		{0x13, 0x411111f0}),
+		ALC256_STANDARD_PINS),
 	SND_HDA_PIN_QUIRK(0x10ec0280, 0x103c, "HP", ALC280_FIXUP_HP_GPIO4,
 		{0x12, 0x90a60130},
-		{0x13, 0x40000000},
 		{0x14, 0x90170110},
 		{0x15, 0x0421101f},
-		{0x16, 0x411111f0},
-		{0x17, 0x411111f0},
-		{0x18, 0x411111f0},
-		{0x19, 0x411111f0},
-		{0x1a, 0x04a11020},
-		{0x1b, 0x411111f0},
-		{0x1d, 0x40748605},
-		{0x1e, 0x411111f0}),
+		{0x1a, 0x04a11020}),
 	SND_HDA_PIN_QUIRK(0x10ec0280, 0x103c, "HP", ALC269_FIXUP_HP_GPIO_MIC1_LED,
 		{0x12, 0x90a60140},
-		{0x13, 0x40000000},
 		{0x14, 0x90170110},
 		{0x15, 0x0421101f},
-		{0x16, 0x411111f0},
-		{0x17, 0x411111f0},
 		{0x18, 0x02811030},
-		{0x19, 0x411111f0},
 		{0x1a, 0x04a1103f},
-		{0x1b, 0x02011020},
-		{0x1d, 0x40700001},
-		{0x1e, 0x411111f0}),
+		{0x1b, 0x02011020}),
 	SND_HDA_PIN_QUIRK(0x10ec0282, 0x103c, "HP 15 Touchsmart", ALC269_FIXUP_HP_MUTE_LED_MIC1,
 		ALC282_STANDARD_PINS,
 		{0x12, 0x99a30130},
-		{0x17, 0x40000000},
 		{0x19, 0x03a11020},
-		{0x1d, 0x40f41905},
 		{0x21, 0x0321101f}),
 	SND_HDA_PIN_QUIRK(0x10ec0282, 0x103c, "HP", ALC269_FIXUP_HP_MUTE_LED_MIC1,
 		ALC282_STANDARD_PINS,
 		{0x12, 0x99a30130},
-		{0x17, 0x40020008},
 		{0x19, 0x03a11020},
-		{0x1d, 0x40e00001},
 		{0x21, 0x03211040}),
 	SND_HDA_PIN_QUIRK(0x10ec0282, 0x103c, "HP", ALC269_FIXUP_HP_MUTE_LED_MIC1,
 		ALC282_STANDARD_PINS,
 		{0x12, 0x99a30130},
-		{0x17, 0x40000000},
 		{0x19, 0x03a11030},
-		{0x1d, 0x40e00001},
 		{0x21, 0x03211020}),
 	SND_HDA_PIN_QUIRK(0x10ec0282, 0x103c, "HP", ALC269_FIXUP_HP_MUTE_LED_MIC1,
 		ALC282_STANDARD_PINS,
 		{0x12, 0x99a30130},
-		{0x17, 0x40000000},
-		{0x19, 0x03a11030},
-		{0x1d, 0x40f00001},
-		{0x21, 0x03211020}),
-	SND_HDA_PIN_QUIRK(0x10ec0282, 0x103c, "HP", ALC269_FIXUP_HP_MUTE_LED_MIC1,
-		ALC282_STANDARD_PINS,
-		{0x12, 0x99a30130},
-		{0x17, 0x40000000},
 		{0x19, 0x04a11020},
-		{0x1d, 0x40f00001},
 		{0x21, 0x0421101f}),
-	SND_HDA_PIN_QUIRK(0x10ec0282, 0x103c, "HP", ALC269_FIXUP_HP_MUTE_LED_MIC1,
-		ALC282_STANDARD_PINS,
-		{0x12, 0x99a30130},
-		{0x17, 0x40000000},
-		{0x19, 0x03a11030},
-		{0x1d, 0x40f00001},
-		{0x21, 0x04211020}),
 	SND_HDA_PIN_QUIRK(0x10ec0282, 0x103c, "HP", ALC269_FIXUP_HP_LINE1_MIC1_LED,
 		ALC282_STANDARD_PINS,
 		{0x12, 0x90a60140},
-		{0x17, 0x40000000},
 		{0x19, 0x04a11030},
-		{0x1d, 0x40f00001},
 		{0x21, 0x04211020}),
 	SND_HDA_PIN_QUIRK(0x10ec0283, 0x1028, "Dell", ALC269_FIXUP_DELL1_MIC_NO_PRESENCE,
 		ALC282_STANDARD_PINS,
 		{0x12, 0x90a60130},
-		{0x17, 0x40020008},
-		{0x19, 0x411111f0},
-		{0x1d, 0x40e00001},
 		{0x21, 0x0321101f}),
 	SND_HDA_PIN_QUIRK(0x10ec0283, 0x1028, "Dell", ALC269_FIXUP_DELL1_MIC_NO_PRESENCE,
 		{0x12, 0x90a60160},
 		{0x14, 0x90170120},
-		{0x17, 0x40000000},
-		{0x18, 0x411111f0},
-		{0x19, 0x411111f0},
-		{0x1a, 0x411111f0},
-		{0x1b, 0x411111f0},
-		{0x1d, 0x40700001},
-		{0x1e, 0x411111f0},
 		{0x21, 0x02211030}),
 	SND_HDA_PIN_QUIRK(0x10ec0283, 0x1028, "Dell", ALC269_FIXUP_DELL1_MIC_NO_PRESENCE,
 		ALC282_STANDARD_PINS,
 		{0x12, 0x90a60130},
-		{0x17, 0x40020008},
 		{0x19, 0x03a11020},
-		{0x1d, 0x40e00001},
 		{0x21, 0x0321101f}),
 	SND_HDA_PIN_QUIRK(0x10ec0288, 0x1028, "Dell", ALC288_FIXUP_DELL_XPS_13_GPIO6,
-		ALC288_STANDARD_PINS,
 		{0x12, 0x90a60120},
-		{0x13, 0x40000000},
 		{0x14, 0x90170110},
-		{0x1d, 0x4076832d},
 		{0x21, 0x0321101f}),
 	SND_HDA_PIN_QUIRK(0x10ec0290, 0x103c, "HP", ALC269_FIXUP_HP_MUTE_LED_MIC1,
 		ALC290_STANDARD_PINS,
-		{0x14, 0x411111f0},
 		{0x15, 0x04211040},
 		{0x18, 0x90170112},
-		{0x1a, 0x04a11020},
-		{0x1d, 0x4075812d}),
+		{0x1a, 0x04a11020}),
 	SND_HDA_PIN_QUIRK(0x10ec0290, 0x103c, "HP", ALC269_FIXUP_HP_MUTE_LED_MIC1,
 		ALC290_STANDARD_PINS,
-		{0x14, 0x411111f0},
 		{0x15, 0x04211040},
 		{0x18, 0x90170110},
-		{0x1a, 0x04a11020},
-		{0x1d, 0x4075812d}),
+		{0x1a, 0x04a11020}),
 	SND_HDA_PIN_QUIRK(0x10ec0290, 0x103c, "HP", ALC269_FIXUP_HP_MUTE_LED_MIC1,
 		ALC290_STANDARD_PINS,
-		{0x14, 0x411111f0},
 		{0x15, 0x0421101f},
-		{0x18, 0x411111f0},
-		{0x1a, 0x04a11020},
-		{0x1d, 0x4075812d}),
+		{0x1a, 0x04a11020}),
 	SND_HDA_PIN_QUIRK(0x10ec0290, 0x103c, "HP", ALC269_FIXUP_HP_MUTE_LED_MIC1,
 		ALC290_STANDARD_PINS,
-		{0x14, 0x411111f0},
 		{0x15, 0x04211020},
-		{0x18, 0x411111f0},
-		{0x1a, 0x04a11040},
-		{0x1d, 0x4076a12d}),
+		{0x1a, 0x04a11040}),
 	SND_HDA_PIN_QUIRK(0x10ec0290, 0x103c, "HP", ALC269_FIXUP_HP_MUTE_LED_MIC1,
 		ALC290_STANDARD_PINS,
 		{0x14, 0x90170110},
 		{0x15, 0x04211020},
-		{0x18, 0x411111f0},
-		{0x1a, 0x04a11040},
-		{0x1d, 0x4076a12d}),
+		{0x1a, 0x04a11040}),
 	SND_HDA_PIN_QUIRK(0x10ec0290, 0x103c, "HP", ALC269_FIXUP_HP_MUTE_LED_MIC1,
 		ALC290_STANDARD_PINS,
 		{0x14, 0x90170110},
 		{0x15, 0x04211020},
-		{0x18, 0x411111f0},
-		{0x1a, 0x04a11020},
-		{0x1d, 0x4076a12d}),
+		{0x1a, 0x04a11020}),
 	SND_HDA_PIN_QUIRK(0x10ec0290, 0x103c, "HP", ALC269_FIXUP_HP_MUTE_LED_MIC1,
 		ALC290_STANDARD_PINS,
 		{0x14, 0x90170110},
 		{0x15, 0x0421101f},
-		{0x18, 0x411111f0},
-		{0x1a, 0x04a11020},
-		{0x1d, 0x4075812d}),
+		{0x1a, 0x04a11020}),
 	SND_HDA_PIN_QUIRK(0x10ec0292, 0x1028, "Dell", ALC269_FIXUP_DELL2_MIC_NO_PRESENCE,
 		ALC292_STANDARD_PINS,
 		{0x12, 0x90a60140},
-		{0x13, 0x411111f0},
 		{0x16, 0x01014020},
-		{0x18, 0x411111f0},
 		{0x19, 0x01a19030}),
 	SND_HDA_PIN_QUIRK(0x10ec0292, 0x1028, "Dell", ALC269_FIXUP_DELL2_MIC_NO_PRESENCE,
 		ALC292_STANDARD_PINS,
 		{0x12, 0x90a60140},
-		{0x13, 0x411111f0},
 		{0x16, 0x01014020},
 		{0x18, 0x02a19031},
 		{0x19, 0x01a1903e}),
 	SND_HDA_PIN_QUIRK(0x10ec0292, 0x1028, "Dell", ALC269_FIXUP_DELL3_MIC_NO_PRESENCE,
 		ALC292_STANDARD_PINS,
-		{0x12, 0x90a60140},
-		{0x13, 0x411111f0},
-		{0x16, 0x411111f0},
-		{0x18, 0x411111f0},
-		{0x19, 0x411111f0}),
+		{0x12, 0x90a60140}),
 	SND_HDA_PIN_QUIRK(0x10ec0293, 0x1028, "Dell", ALC293_FIXUP_DELL1_MIC_NO_PRESENCE,
 		ALC292_STANDARD_PINS,
-		{0x12, 0x40000000},
 		{0x13, 0x90a60140},
 		{0x16, 0x21014020},
-		{0x18, 0x411111f0},
 		{0x19, 0x21a19030}),
 	SND_HDA_PIN_QUIRK(0x10ec0293, 0x1028, "Dell", ALC293_FIXUP_DELL1_MIC_NO_PRESENCE,
 		ALC292_STANDARD_PINS,
-		{0x12, 0x40000000},
-		{0x13, 0x90a60140},
-		{0x16, 0x411111f0},
-		{0x18, 0x411111f0},
-		{0x19, 0x411111f0}),
+		{0x13, 0x90a60140}),
+	SND_HDA_PIN_QUIRK(0x10ec0298, 0x1028, "Dell", ALC298_FIXUP_DELL1_MIC_NO_PRESENCE,
+		ALC298_STANDARD_PINS,
+		{0x17, 0x90170110}),
+	SND_HDA_PIN_QUIRK(0x10ec0298, 0x1028, "Dell", ALC298_FIXUP_DELL1_MIC_NO_PRESENCE,
+		ALC298_STANDARD_PINS,
+		{0x17, 0x90170140}),
+	SND_HDA_PIN_QUIRK(0x10ec0298, 0x1028, "Dell", ALC298_FIXUP_DELL1_MIC_NO_PRESENCE,
+		ALC298_STANDARD_PINS,
+		{0x17, 0x90170150}),
 	{}
 };
 
@@ -6562,77 +6512,33 @@ static const struct hda_model_fixup alc662_fixup_models[] = {
 
 static const struct snd_hda_pin_quirk alc662_pin_fixup_tbl[] = {
 	SND_HDA_PIN_QUIRK(0x10ec0662, 0x1028, "Dell", ALC662_FIXUP_DELL_MIC_NO_PRESENCE,
-		{0x12, 0x4004c000},
 		{0x14, 0x01014010},
-		{0x15, 0x411111f0},
-		{0x16, 0x411111f0},
 		{0x18, 0x01a19020},
-		{0x19, 0x411111f0},
 		{0x1a, 0x0181302f},
-		{0x1b, 0x0221401f},
-		{0x1c, 0x411111f0},
-		{0x1d, 0x4054c601},
-		{0x1e, 0x411111f0}),
+		{0x1b, 0x0221401f}),
 	SND_HDA_PIN_QUIRK(0x10ec0668, 0x1028, "Dell", ALC668_FIXUP_AUTO_MUTE,
 		{0x12, 0x99a30130},
 		{0x14, 0x90170110},
 		{0x15, 0x0321101f},
-		{0x16, 0x03011020},
-		{0x18, 0x40000008},
-		{0x19, 0x411111f0},
-		{0x1a, 0x411111f0},
-		{0x1b, 0x411111f0},
-		{0x1d, 0x41000001},
-		{0x1e, 0x411111f0},
-		{0x1f, 0x411111f0}),
+		{0x16, 0x03011020}),
 	SND_HDA_PIN_QUIRK(0x10ec0668, 0x1028, "Dell", ALC668_FIXUP_AUTO_MUTE,
 		{0x12, 0x99a30140},
 		{0x14, 0x90170110},
 		{0x15, 0x0321101f},
-		{0x16, 0x03011020},
-		{0x18, 0x40000008},
-		{0x19, 0x411111f0},
-		{0x1a, 0x411111f0},
-		{0x1b, 0x411111f0},
-		{0x1d, 0x41000001},
-		{0x1e, 0x411111f0},
-		{0x1f, 0x411111f0}),
+		{0x16, 0x03011020}),
 	SND_HDA_PIN_QUIRK(0x10ec0668, 0x1028, "Dell", ALC668_FIXUP_AUTO_MUTE,
 		{0x12, 0x99a30150},
 		{0x14, 0x90170110},
 		{0x15, 0x0321101f},
-		{0x16, 0x03011020},
-		{0x18, 0x40000008},
-		{0x19, 0x411111f0},
-		{0x1a, 0x411111f0},
-		{0x1b, 0x411111f0},
-		{0x1d, 0x41000001},
-		{0x1e, 0x411111f0},
-		{0x1f, 0x411111f0}),
+		{0x16, 0x03011020}),
 	SND_HDA_PIN_QUIRK(0x10ec0668, 0x1028, "Dell", ALC668_FIXUP_AUTO_MUTE,
-		{0x12, 0x411111f0},
 		{0x14, 0x90170110},
 		{0x15, 0x0321101f},
-		{0x16, 0x03011020},
-		{0x18, 0x40000008},
-		{0x19, 0x411111f0},
-		{0x1a, 0x411111f0},
-		{0x1b, 0x411111f0},
-		{0x1d, 0x41000001},
-		{0x1e, 0x411111f0},
-		{0x1f, 0x411111f0}),
+		{0x16, 0x03011020}),
 	SND_HDA_PIN_QUIRK(0x10ec0668, 0x1028, "Dell XPS 15", ALC668_FIXUP_AUTO_MUTE,
 		{0x12, 0x90a60130},
 		{0x14, 0x90170110},
-		{0x15, 0x0321101f},
-		{0x16, 0x40000000},
-		{0x18, 0x411111f0},
-		{0x19, 0x411111f0},
-		{0x1a, 0x411111f0},
-		{0x1b, 0x411111f0},
-		{0x1d, 0x40d6832d},
-		{0x1e, 0x411111f0},
-		{0x1f, 0x411111f0}),
+		{0x15, 0x0321101f}),
 	{}
 };
 

@@ -126,8 +126,8 @@ static u64 oct_mdio_readq(u64 addr)
 	return cvmx_read_csr(addr);
 }
 #else
-#define oct_mdio_writeq(val, addr)	writeq_relaxed(val, (void *)addr)
-#define oct_mdio_readq(addr)		readq_relaxed((void *)addr)
+#define oct_mdio_writeq(val, addr)	writeq(val, (void *)addr)
+#define oct_mdio_readq(addr)		readq((void *)addr)
 #endif
 
 static void octeon_mdiobus_set_mode(struct octeon_mdiobus *p,

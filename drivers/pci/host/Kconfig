@@ -58,6 +58,15 @@ config PCI_HOST_GENERIC
 	  Say Y here if you want to support a simple generic PCI host
 	  controller, such as the one emulated by kvmtool.
 
+config PCI_HOST_THUNDER
+	bool "Extensions to Generic PCI host controller for Cavium Thunder"
+	depends on PCI_HOST_GENERIC && ARM64
+	help
+	  Say Y here to enable PCI config access methods needed by
+	  CN88XX Cavium Thunder SoCs.  The access is standard ECAM,
+	  but Enhanced Allocation (EA) capability structures are
+	  synthesized for on-SoC devices with fixed BARs.
+
 config PCIE_SPEAR13XX
 	bool "STMicroelectronics SPEAr PCIe controller"
 	depends on ARCH_SPEAR13XX

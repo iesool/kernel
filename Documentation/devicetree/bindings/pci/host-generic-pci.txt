@@ -19,6 +19,7 @@ Properties of the host controller node:
                    "pci-host-cam-generic" -- 'CAM'  bits 16:8:0
                    "pci-host-ecam-generic" -- 'ECAM'  bits 20:12:0
                    "cavium,pci-host-thunder-pem" --  bits 24:16:0
+                   "cavium,pci-host-thunder-ecam" --  bits 20:12:0 fixed BARs
 
 - device_type    : Must be "pci".
 

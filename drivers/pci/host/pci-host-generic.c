@@ -92,6 +92,21 @@ static struct gen_pci_cfg_bus_ops gen_pci_cfg_ecam_bus_ops = {
 	}
 };
 
+#ifdef CONFIG_PCI_HOST_THUNDER
+int thunder_ecam_config_read(struct pci_bus *bus, unsigned int devfn,
+			     int where, int size, u32 *val);
+int thunder_ecam_config_write(struct pci_bus *bus, unsigned int devfn,
+			     int where, int size, u32 val);
+static struct gen_pci_cfg_bus_ops gen_pci_cfg_thunder_ecam_bus_ops = {
+	.bus_shift	= 20,
+	.ops		= {
+		.map_bus	= gen_pci_map_cfg_bus_ecam,
+		.read		= thunder_ecam_config_read,
+		.write		= thunder_ecam_config_write,
+	}
+};
+#endif
+
 static void __iomem *gen_pci_map_cfg_bus_thunder_pem(struct pci_bus *bus,
 						     unsigned int devfn,
 						     int where)
@@ -127,7 +142,10 @@ static const struct of_device_id gen_pci_of_match[] = {
 
 	{ .compatible = "cavium,pci-host-thunder-pem",
 	  .data = &gen_pci_cfg_thunder_pem_bus_ops },
-
+#ifdef CONFIG_PCI_HOST_THUNDER
+	{ .compatible = "cavium,pci-host-thunder-ecam",
+	  .data = &gen_pci_cfg_thunder_ecam_bus_ops },
+#endif
 	{ },
 };
 MODULE_DEVICE_TABLE(of, gen_pci_of_match);

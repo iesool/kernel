@@ -16,5 +16,3 @@ obj-$(CONFIG_PCI_LAYERSCAPE) += pci-layerscape.o
 obj-$(CONFIG_PCI_VERSATILE) += pci-versatile.o
 obj-$(CONFIG_PCIE_IPROC) += pcie-iproc.o
 obj-$(CONFIG_PCIE_IPROC_PLATFORM) += pcie-iproc-platform.o
-obj-$(CONFIG_PCI_THUNDER) += pcie-thunder.o
-obj-$(CONFIG_PCI_THUNDER_PEM) += pcie-thunder-pem.o

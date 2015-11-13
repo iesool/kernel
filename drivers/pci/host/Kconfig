@@ -134,16 +134,4 @@ config PCIE_IPROC_PLATFORM
 	  Say Y here if you want to use the Broadcom iProc PCIe controller
 	  through the generic platform bus interface
 
-config PCI_THUNDER_PEM
-	bool
-
-config PCI_THUNDER
-	bool "Thunder PCIe host controller"
-	depends on ARM64 || COMPILE_TEST
-	depends on OF_PCI
-	depends on PCI_MSI
-	select PCI_THUNDER_PEM
-	help
-	  Say Y here if you want internal PCI support on Thunder SoC.
-
 endmenu

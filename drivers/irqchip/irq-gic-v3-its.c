@@ -1272,23 +1272,11 @@ static int its_pci_msi_vec_count(struct pci_dev *pdev)
 	return max(msi, msix);
 }
 
-static u32 its_dflt_pci_requester_id(struct pci_dev *pdev, u16 alias)
-{
-	return alias;
-}
-
-static its_pci_requester_id_t its_pci_requester_id = its_dflt_pci_requester_id;
-void set_its_pci_requester_id(its_pci_requester_id_t fn)
-{
-	its_pci_requester_id = fn;
-}
-EXPORT_SYMBOL(set_its_pci_requester_id);
-
 static int its_get_pci_alias(struct pci_dev *pdev, u16 alias, void *data)
 {
 	struct its_pci_alias *dev_alias = data;
 
-	dev_alias->dev_id = its_pci_requester_id(pdev, alias);
+	dev_alias->dev_id = alias;
 	if (pdev != dev_alias->pdev)
 		dev_alias->count += its_pci_msi_vec_count(dev_alias->pdev);
 

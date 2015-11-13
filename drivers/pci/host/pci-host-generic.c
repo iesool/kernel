@@ -265,6 +265,47 @@ static int gen_pci_setup(int nr, struct pci_sys_data *sys)
 }
 #endif
 
+#ifdef CONFIG_KVM_ARM_VGIC
+struct msi_chip *vgic_its_get_msi_node(struct pci_bus *bus, struct msi_chip *msi);
+#endif
+
+static int pcie_msi_enable_cb(struct pci_dev *dev, void *arg)
+{
+	if (dev->subordinate) {
+		/* it is a bridge, propagate the msi */
+		dev->subordinate->msi = dev->bus->msi;
+	}
+	return 0;
+}
+
+static int pcie_msi_enable(struct device_node *np, struct pci_bus *bus)
+{
+	struct device_node *msi_node;
+#ifdef CONFIG_KVM_ARM_VGIC
+	struct msi_chip *vits_msi;
+#endif
+	struct msi_controller *msi;
+
+	msi_node = of_parse_phandle(np, "msi-parent", 0);
+	if (!msi_node)
+		return -ENODEV;
+
+	msi = of_pci_find_msi_chip_by_node(msi_node);
+	if (!msi)
+		return -ENODEV;
+
+#ifdef CONFIG_KVM_ARM_VGIC
+	vits_msi = vgic_its_get_msi_node(bus, msi);
+
+	msi->dev = bus->bridge->parent;
+	bus->msi = vits_msi;
+#else
+	bus->msi = msi;
+#endif
+	pci_walk_bus(bus, pcie_msi_enable_cb, NULL);
+	return 0;
+}
+
 static int gen_pci_probe(struct platform_device *pdev)
 {
 	int err;
@@ -323,6 +364,7 @@ static int gen_pci_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to enable PCIe ports\n");
 		return -ENODEV;
 	}
+	pcie_msi_enable(np, bus);
 
 	if (!pci_has_flag(PCI_PROBE_ONLY)) {
 		pci_bus_size_bridges(bus);

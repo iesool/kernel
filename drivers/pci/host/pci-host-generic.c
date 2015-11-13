@@ -92,12 +92,41 @@ static struct gen_pci_cfg_bus_ops gen_pci_cfg_ecam_bus_ops = {
 	}
 };
 
+static void __iomem *gen_pci_map_cfg_bus_thunder_pem(struct pci_bus *bus,
+						     unsigned int devfn,
+						     int where)
+{
+	struct gen_pci *pci = bus->sysdata;
+	resource_size_t idx = bus->number - pci->cfg.bus_range->start;
+
+	/*
+	 * Thunder PEM is a PCIe RC, but without a root bridge.  On
+	 * the primary bus, ignore accesses for devices other than
+	 * the first device.
+	 */
+	if (idx == 0 && (devfn & ~7u))
+		return NULL;
+	return pci->cfg.win[idx] + ((devfn << 16) | where);
+}
+
+static struct gen_pci_cfg_bus_ops gen_pci_cfg_thunder_pem_bus_ops = {
+	.bus_shift	= 24,
+	.ops		= {
+		.map_bus	= gen_pci_map_cfg_bus_thunder_pem,
+		.read		= pci_generic_config_read,
+		.write		= pci_generic_config_write,
+	}
+};
+
 static const struct of_device_id gen_pci_of_match[] = {
 	{ .compatible = "pci-host-cam-generic",
 	  .data = &gen_pci_cfg_cam_bus_ops },
 
 	{ .compatible = "pci-host-ecam-generic",
 	  .data = &gen_pci_cfg_ecam_bus_ops },
+
+	{ .compatible = "cavium,pci-host-thunder-pem",
+	  .data = &gen_pci_cfg_thunder_pem_bus_ops },
 
 	{ },
 };

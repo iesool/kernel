@@ -14,9 +14,11 @@ tree bindings communicated in pci.txt:
 
 Properties of the host controller node:
 
-- compatible     : Must be "pci-host-cam-generic" or "pci-host-ecam-generic"
-                   depending on the layout of configuration space (CAM vs
-                   ECAM respectively).
+- compatible     : One of the following with bus:devfn:reg mapped to the
+                   PCI config space address window in the bit positions shown:
+                   "pci-host-cam-generic" -- 'CAM'  bits 16:8:0
+                   "pci-host-ecam-generic" -- 'ECAM'  bits 20:12:0
+                   "cavium,pci-host-thunder-pem" --  bits 24:16:0
 
 - device_type    : Must be "pci".
 

@@ -113,7 +113,7 @@ static ssize_t thunderx_lmc_ecc_##_field##_store(struct device *dev,	    \
 	struct thunderx_lmc *lmc = mci->pvt_info;			    \
 	int res = kstrtoull(data, 0, &lmc->_field);			    \
 									    \
-	return res ? count : res;					    \
+	return res ? res : count;					    \
 }									    \
 									    \
 struct device_attribute dev_attr_ecc_##_field =				    \

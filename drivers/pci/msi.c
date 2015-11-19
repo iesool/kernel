@@ -1383,12 +1383,14 @@ static int get_msi_id_cb(struct pci_dev *pdev, u16 alias, void *data)
  */
 u32 pci_msi_domain_get_msi_rid(struct irq_domain *domain, struct pci_dev *pdev)
 {
+	struct device_node *of_node;
 	u32 rid = 0;
 
 	pci_for_each_dma_alias(pdev, get_msi_id_cb, &rid);
 
-	if (domain->of_node)
-		rid = of_msi_map_rid(&pdev->dev, domain->of_node, rid);
+	of_node = irq_domain_get_of_node(domain);
+	if (of_node)
+		rid = of_msi_map_rid(&pdev->dev, of_node, rid);
 
 	return rid;
 }

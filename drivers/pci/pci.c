@@ -2134,17 +2134,17 @@ void pci_pm_init(struct pci_dev *dev)
 	}
 }
 
-static unsigned long pci_ea_set_flags(struct pci_dev *dev, u8 prop)
+static unsigned long pci_ea_flags(struct pci_dev *dev, u8 prop)
 {
 	unsigned long flags = IORESOURCE_PCI_FIXED;
 
 	switch (prop) {
 	case PCI_EA_P_MEM:
-	case PCI_EA_P_VIRT_MEM:
+	case PCI_EA_P_VF_MEM:
 		flags |= IORESOURCE_MEM;
 		break;
 	case PCI_EA_P_MEM_PREFETCH:
-	case PCI_EA_P_VIRT_MEM_PREFETCH:
+	case PCI_EA_P_VF_MEM_PREFETCH:
 		flags |= IORESOURCE_MEM | IORESOURCE_PREFETCH;
 		break;
 	case PCI_EA_P_IO:
@@ -2164,8 +2164,7 @@ static struct resource *pci_ea_get_resource(struct pci_dev *dev, u8 bei,
 		return &dev->resource[bei];
 #ifdef CONFIG_PCI_IOV
 	else if (bei >= PCI_EA_BEI_VF_BAR0 && bei <= PCI_EA_BEI_VF_BAR5 &&
-		 (prop == PCI_EA_P_VIRT_MEM ||
-		  prop == PCI_EA_P_VIRT_MEM_PREFETCH))
+		 (prop == PCI_EA_P_VF_MEM || prop == PCI_EA_P_VF_MEM_PREFETCH))
 		return &dev->resource[PCI_IOV_RESOURCES +
 				      bei - PCI_EA_BEI_VF_BAR0];
 #endif
@@ -2179,14 +2178,10 @@ static struct resource *pci_ea_get_resource(struct pci_dev *dev, u8 bei,
 static int pci_ea_read(struct pci_dev *dev, int offset)
 {
 	struct resource *res;
-	int ent_offset = offset;
-	int ent_size;
-	resource_size_t start;
-	resource_size_t end;
+	int ent_size, ent_offset = offset;
+	resource_size_t start, end;
 	unsigned long flags;
-	u32 dw0;
-	u32 base;
-	u32 max_offset;
+	u32 dw0, base, max_offset;
 	u8 prop;
 	bool support_64 = (sizeof(resource_size_t) >= 8);
 
@@ -2216,9 +2211,9 @@ static int pci_ea_read(struct pci_dev *dev, int offset)
 		goto out;
 	}
 
-	flags = pci_ea_set_flags(dev, prop);
+	flags = pci_ea_flags(dev, prop);
 	if (!flags) {
-		dev_err(&dev->dev, "Unsupported EA properties: %u\n", prop);
+		dev_err(&dev->dev, "Unsupported EA properties: %#x\n", prop);
 		goto out;
 	}
 
@@ -2248,9 +2243,6 @@ static int pci_ea_read(struct pci_dev *dev, int offset)
 			start |= ((u64)base_upper << 32);
 	}
 
-	dev_dbg(&dev->dev,
-		"EA (%u,%u) start = %pa\n", PCI_EA_BEI(dw0), prop, &start);
-
 	end = start + (max_offset | 0x03);
 
 	/* Read MaxOffset MSBs (if 64-bit entry) */
@@ -2270,9 +2262,6 @@ static int pci_ea_read(struct pci_dev *dev, int offset)
 			end += ((u64)max_offset_upper << 32);
 	}
 
-	dev_dbg(&dev->dev,
-		"EA (%u,%u) end = %pa\n", PCI_EA_BEI(dw0), prop, &end);
-
 	if (end < start) {
 		dev_err(&dev->dev, "EA Entry crosses address boundary\n");
 		goto out;
@@ -2289,7 +2278,8 @@ static int pci_ea_read(struct pci_dev *dev, int offset)
 	res->start = start;
 	res->end = end;
 	res->flags = flags;
-
+	dev_printk(KERN_DEBUG, &dev->dev, "EA - BEI %2u, Prop 0x%02x: %pR\n",
+		   PCI_EA_BEI(dw0), prop, res);
 out:
 	return offset + ent_size;
 }

@@ -34,6 +34,8 @@
 /* NIC priv flags */
 #define	NIC_SRIOV_ENABLED		BIT(0)
 
+#define	VNIC_NAPI_WEIGHT		NAPI_POLL_WEIGHT
+
 /* Min/Max packet size */
 #define	NIC_HW_MIN_FRS			64
 #define	NIC_HW_MAX_FRS			9200 /* 9216 max packet including FCS */

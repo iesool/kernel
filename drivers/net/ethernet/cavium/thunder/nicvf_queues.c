@@ -925,7 +925,7 @@ static int nicvf_sq_subdesc_required(struct nicvf *nic, struct sk_buff *skb)
 {
 	int subdesc_cnt = MIN_SQ_DESC_PER_PKT_XMIT;
 
-	if (skb_shinfo(skb)->gso_size) {
+	if (skb_shinfo(skb)->gso_size && !nic->hw_tso) {
 		subdesc_cnt = nicvf_tso_count_subdescs(skb);
 		return subdesc_cnt;
 	}
@@ -940,8 +940,8 @@ static int nicvf_sq_subdesc_required(struct nicvf *nic, struct sk_buff *skb)
  * First subdescriptor for every send descriptor.
  */
 static inline void
-nicvf_sq_add_hdr_subdesc(struct snd_queue *sq, int qentry,
-			 int subdesc_cnt, struct sk_buff *skb, int len)
+nicvf_sq_add_hdr_subdesc(struct snd_queue *sq, int qentry, int subdesc_cnt,
+			 struct sk_buff *skb, int len, bool hw_tso)
 {
 	int proto;
 	struct sq_hdr_subdesc *hdr;
@@ -975,6 +975,12 @@ nicvf_sq_add_hdr_subdesc(struct snd_queue *sq, int qentry,
 			hdr->csum_l4 = SEND_L4_CSUM_SCTP;
 			break;
 		}
+	}
+
+	if (hw_tso && skb_shinfo(skb)->gso_size) {
+		hdr->tso = 1;
+		hdr->tso_start = skb_transport_offset(skb) + tcp_hdrlen(skb);
+		hdr->tso_max_paysize = skb_shinfo(skb)->gso_size;
 	}
 }
 
@@ -1046,7 +1052,7 @@ static int nicvf_sq_append_tso(struct nicvf *nic, struct snd_queue *sq,
 			tso_build_data(skb, &tso, size);
 		}
 		nicvf_sq_add_hdr_subdesc(sq, hdr_qentry,
-					 seg_subdescs - 1, skb, seg_len);
+					 seg_subdescs - 1, skb, seg_len, false);
 		sq->skbuff[hdr_qentry] = (u64)NULL;
 		qentry = nicvf_get_nxt_sqentry(sq, qentry);
 
@@ -1098,11 +1104,12 @@ int nicvf_sq_append_skb(struct nicvf *nic, struct sk_buff *skb)
 	qentry = nicvf_get_sq_desc(sq, subdesc_cnt);
 
 	/* Check if its a TSO packet */
-	if (skb_shinfo(skb)->gso_size)
+	if (skb_shinfo(skb)->gso_size && !nic->hw_tso)
 		return nicvf_sq_append_tso(nic, sq, sq_num, qentry, skb);
 
 	/* Add SQ header subdesc */
-	nicvf_sq_add_hdr_subdesc(sq, qentry, subdesc_cnt - 1, skb, skb->len);
+	nicvf_sq_add_hdr_subdesc(sq, qentry, subdesc_cnt - 1, skb,
+				 skb->len, nic->hw_tso);
 
 	/* Add SQ gather subdescs */
 	qentry = nicvf_get_nxt_sqentry(sq, qentry);

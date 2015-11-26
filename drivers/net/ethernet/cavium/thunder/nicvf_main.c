@@ -1551,6 +1551,9 @@ static int nicvf_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	netdev->features |= netdev->hw_features;
 	netdev->hw_features |= NETIF_F_LOOPBACK;
 
+	if (!pass1_silicon(nic))
+		nic->hw_tso = true;
+
 	netdev->netdev_ops = &nicvf_netdev_ops;
 	netdev->vlan_features = NETIF_F_SG | NETIF_F_IP_CSUM | NETIF_F_TSO;
 	netdev->watchdog_timeo = NICVF_TX_TIMEOUT;

@@ -162,6 +162,8 @@ struct nicvf_rss_info {
 	u64 key[RSS_HASH_KEY_SIZE];
 } ____cacheline_aligned_in_smp;
 
+#define pass1_silicon(nic)		((nic)->pdev->revision < 8)
+
 enum rx_stats_reg_offset {
 	RX_OCTS = 0x0,
 	RX_UCAST = 0x1,
@@ -265,6 +267,7 @@ struct nicvf {
 	bool			tns_mode:1;
 	bool                    sqs_mode:1;
 	bool			loopback_supported:1;
+	bool			hw_tso:1;
 	u16			mtu;
 	struct queue_set	*qs;
 #define	MAX_SQS_PER_VF_SINGLE_NODE		5

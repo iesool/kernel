@@ -1602,6 +1602,9 @@ static void nicvf_remove(struct pci_dev *pdev)
 
 static void nicvf_shutdown(struct pci_dev *pdev)
 {
+	if (!pci_get_drvdata(pdev))
+		return;
+
 	nicvf_remove(pdev);
 }
 

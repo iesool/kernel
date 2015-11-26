@@ -62,7 +62,7 @@
 #define SND_QUEUE_CNT		8
 #define CMP_QUEUE_CNT		8 /* Max of RCV and SND qcount */
 
-#define SND_QSIZE		SND_QUEUE_SIZE2
+#define SND_QSIZE		SND_QUEUE_SIZE3
 #define SND_QUEUE_LEN		(1ULL << (SND_QSIZE + 10))
 #define MAX_SND_QUEUE_LEN	(1ULL << (SND_QUEUE_SIZE6 + 10))
 #define SND_QUEUE_THRESH	2ULL
@@ -73,7 +73,7 @@
 /* Keep CQ and SQ sizes same, if timestamping
  * is enabled this equation will change.
  */
-#define CMP_QSIZE		CMP_QUEUE_SIZE2
+#define CMP_QSIZE		CMP_QUEUE_SIZE3
 #define CMP_QUEUE_LEN		(1ULL << (CMP_QSIZE + 10))
 #define CMP_QUEUE_CQE_THRESH	0
 #define CMP_QUEUE_TIMER_THRESH	80 /* ~2usec */

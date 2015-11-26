@@ -262,9 +262,9 @@ struct nicvf {
 	struct pci_dev		*pdev;
 	u8			vf_id;
 	u8			node;
-	u8			tns_mode:1;
-	u8			sqs_mode:1;
-	u8			loopback_supported:1;
+	bool			tns_mode:1;
+	bool                    sqs_mode:1;
+	bool			loopback_supported:1;
 	u16			mtu;
 	struct queue_set	*qs;
 #define	MAX_SQS_PER_VF_SINGLE_NODE		5
@@ -352,9 +352,9 @@ struct nic_cfg_msg {
 	u8    msg;
 	u8    vf_id;
 	u8    node_id;
-	u8    tns_mode:1;
-	u8    sqs_mode:1;
-	u8    loopback_supported:1;
+	bool  tns_mode:1;
+	bool  sqs_mode:1;
+	bool  loopback_supported:1;
 	u8    mac_addr[ETH_ALEN];
 };
 

@@ -1027,6 +1027,9 @@ static int bgx_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	struct bgx *bgx = NULL;
 	u8 lmac;
 
+	/*Load octeon mdio driver*/
+	octeon_mdiobus_force_mod_depencency();
+
 	bgx = devm_kzalloc(dev, sizeof(*bgx), GFP_KERNEL);
 	if (!bgx)
 		return -ENOMEM;

@@ -1047,7 +1047,8 @@ static int bgx_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	}
 
 	/* MAP configuration registers */
-	bgx->reg_base = pcim_iomap(pdev, PCI_CFG_REG_BAR_NUM, 0);
+	bgx->reg_base = ioremap(pci_resource_start(pdev, 0),
+			pci_resource_len(pdev, 0));
 	if (!bgx->reg_base) {
 		dev_err(dev, "BGX: Cannot map CSR memory space, aborting\n");
 		err = -ENOMEM;
@@ -1097,6 +1098,9 @@ static void bgx_remove(struct pci_dev *pdev)
 		bgx_lmac_disable(bgx, lmac);
 
 	bgx_vnic[bgx->bgx_id] = NULL;
+
+	if (bgx->reg_base)
+		iounmap(bgx->reg_base);
 	pci_release_regions(pdev);
 	pci_disable_device(pdev);
 	pci_set_drvdata(pdev, NULL);

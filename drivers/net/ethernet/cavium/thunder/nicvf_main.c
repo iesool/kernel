@@ -1514,7 +1514,8 @@ static int nicvf_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	nic->max_queues = qcount;
 
 	/* MAP VF's configuration registers */
-	nic->reg_base = pcim_iomap(pdev, PCI_CFG_REG_BAR_NUM, 0);
+	nic->reg_base = ioremap(pci_resource_start(pdev, 0),
+			pci_resource_len(pdev, 0));
 	if (!nic->reg_base) {
 		dev_err(dev, "Cannot map config register space, aborting\n");
 		err = -ENOMEM;
@@ -1603,6 +1604,9 @@ static void nicvf_remove(struct pci_dev *pdev)
 		unregister_netdev(pnetdev);
 	nicvf_unregister_interrupts(nic);
 	pci_set_drvdata(pdev, NULL);
+
+	if (nic->reg_base)
+		iounmap(nic->reg_base);
 	if (nic->qs)
 		devm_kfree(&pdev->dev, nic->qs);
 	free_netdev(netdev);

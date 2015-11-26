@@ -1029,7 +1029,8 @@ static int nic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	}
 
 	/* MAP PF's configuration registers */
-	nic->reg_base = pcim_iomap(pdev, PCI_CFG_REG_BAR_NUM, 0);
+	nic->reg_base = ioremap(pci_resource_start(pdev, 0),
+			pci_resource_len(pdev, 0));
 	if (!nic->reg_base) {
 		dev_err(dev, "Cannot map config register space, aborting\n");
 		err = -ENOMEM;
@@ -1096,6 +1097,8 @@ static void nic_remove(struct pci_dev *pdev)
 		destroy_workqueue(nic->check_link);
 	}
 
+	if (nic->reg_base)
+		iounmap(nic->reg_base);
 	nic_unregister_interrupts(nic);
 	pci_release_regions(pdev);
 	pci_disable_device(pdev);

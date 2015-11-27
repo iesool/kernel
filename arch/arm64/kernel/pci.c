@@ -89,3 +89,12 @@ int pcibios_enable_device(struct pci_dev *dev, int mask)
 
 	return pci_enable_resources(dev, mask);
 }
+
+#ifdef CONFIG_NUMA
+int pcibus_to_node(struct pci_bus *bus)
+{
+	return dev_to_node(&bus->dev);
+}
+EXPORT_SYMBOL(pcibus_to_node);
+#endif
+

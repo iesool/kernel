@@ -66,13 +66,13 @@ config ARM64
 	select HAVE_GENERIC_DMA_COHERENT
 	select HAVE_HW_BREAKPOINT if PERF_EVENTS
 	select HAVE_MEMBLOCK
+	select HAVE_MEMBLOCK_NODE_MAP if NUMA
 	select HAVE_PATA_PLATFORM
 	select HAVE_PERF_EVENTS
 	select HAVE_PERF_REGS
 	select HAVE_PERF_USER_STACK_DUMP
 	select HAVE_RCU_TABLE_FREE
 	select HAVE_SYSCALL_TRACEPOINTS
-	select HAVE_MEMBLOCK_NODE_MAP if NUMA
 	select IRQ_DOMAIN
 	select MODULES_USE_ELF_RELA
 	select NO_BOOTMEM
@@ -582,14 +582,18 @@ config NUMA
 	  Enable NUMA (Non Uniform Memory Access) support.
 
 	  The kernel will try to allocate memory used by a CPU on the
-	  local memory controller of the CPU and add some more
+	  local memory of the CPU and add some more
 	  NUMA awareness to the kernel.
 
-config ARM64_DT_NUMA
+config OF_NUMA
 	bool "Device Tree NUMA support"
 	depends on NUMA
+	depends on OF
+	default y
 	help
 	  Enable Device Tree NUMA support.
+	  This enables the numa mapping of cpu, memory, io and
+	  inter node distances using dt bindings.
 
 config NODES_SHIFT
 	int "Maximum NUMA Nodes (as a power of 2)"
@@ -603,7 +607,6 @@ config NODES_SHIFT
 config USE_PERCPU_NUMA_NODE_ID
 	def_bool y
 	depends on NUMA
-
 
 source kernel/Kconfig.preempt
 

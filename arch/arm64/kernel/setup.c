@@ -54,6 +54,7 @@
 #include <asm/elf.h>
 #include <asm/cpufeature.h>
 #include <asm/cpu_ops.h>
+#include <asm/numa.h>
 #include <asm/sections.h>
 #include <asm/setup.h>
 #include <asm/smp_plat.h>
@@ -64,7 +65,6 @@
 #include <asm/psci.h>
 #include <asm/efi.h>
 #include <asm/virt.h>
-#include <asm/numa.h>
 
 unsigned long elf_hwcap __read_mostly;
 EXPORT_SYMBOL_GPL(elf_hwcap);
@@ -513,12 +513,7 @@ static int c_show(struct seq_file *m, void *v)
 		 * "processor".  Give glibc what it expects.
 		 */
 #ifdef CONFIG_SMP
-	if (IS_ENABLED(CONFIG_NUMA)) {
-		seq_printf(m, "processor\t: %d", i);
-		seq_printf(m, " [nid: %d]\n", cpu_to_node(i));
-	} else {
 		seq_printf(m, "processor\t: %d\n", i);
-	}
 #endif
 
 		/*

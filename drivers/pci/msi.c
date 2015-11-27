@@ -20,7 +20,6 @@
 #include <linux/io.h>
 #include <linux/slab.h>
 #include <linux/irqdomain.h>
-#include <linux/of_irq.h>
 
 #include "pci.h"
 
@@ -1363,6 +1362,8 @@ struct irq_domain *pci_msi_create_default_irq_domain(struct device_node *node,
 
 	return domain;
 }
+
+#include <linux/of_irq.h>
 
 static int get_msi_id_cb(struct pci_dev *pdev, u16 alias, void *data)
 {

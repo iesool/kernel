@@ -224,7 +224,11 @@ struct ipv6_pinfo {
 	struct ipv6_ac_socklist	*ipv6_ac_list;
 	struct ipv6_fl_socklist __rcu *ipv6_fl_list;
 
+#ifdef __GENKSYMS__
 	struct ipv6_txoptions	*opt;
+#else
+	struct ipv6_txoptions __rcu	*opt;
+#endif
 	struct sk_buff		*pktoptions;
 	struct sk_buff		*rxpmtu;
 	struct inet6_cork	cork;

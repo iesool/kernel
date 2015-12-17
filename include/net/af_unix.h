@@ -63,6 +63,9 @@ struct unix_sock {
 #define UNIX_GC_CANDIDATE	0
 #define UNIX_GC_MAYBE_CYCLE	1
 	struct socket_wq	peer_wq;
+#ifndef __GENKSYMS__
+	wait_queue_t		peer_wake;
+#endif
 };
 
 static inline struct unix_sock *unix_sk(struct sock *sk)

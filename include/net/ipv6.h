@@ -205,6 +205,7 @@ extern rwlock_t ip6_ra_lock;
  */
 
 struct ipv6_txoptions {
+	atomic_t		refcnt;
 	/* Length of this structure */
 	int			tot_len;
 
@@ -217,10 +218,7 @@ struct ipv6_txoptions {
 	struct ipv6_opt_hdr	*dst0opt;
 	struct ipv6_rt_hdr	*srcrt;	/* Routing Header */
 	struct ipv6_opt_hdr	*dst1opt;
-#ifndef __GENKSYMS__
-	atomic_t		refcnt;
 	struct rcu_head		rcu;
-#endif
 	/* Option buffer, as read by IPV6_PKTOPTIONS, starts here. */
 };
 
@@ -509,10 +507,8 @@ struct ip6_create_arg {
 	u32 user;
 	const struct in6_addr *src;
 	const struct in6_addr *dst;
-	u8 ecn;
-#ifndef __GENKSYMS__
 	int iif;
-#endif
+	u8 ecn;
 };
 
 void ip6_frag_init(struct inet_frag_queue *q, const void *a);

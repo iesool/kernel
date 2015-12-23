@@ -4997,6 +4997,211 @@ static void modeset_update_crtc_power_domains(struct drm_atomic_state *state)
 	intel_display_set_init_power(dev_priv, false);
 }
 
+static const struct skl_cdclk_entry {
+	unsigned int freq;
+	unsigned int vco;
+} skl_cdclk_frequencies[] = {
+	{ .freq = 308570, .vco = 8640 },
+	{ .freq = 337500, .vco = 8100 },
+	{ .freq = 432000, .vco = 8640 },
+	{ .freq = 450000, .vco = 8100 },
+	{ .freq = 540000, .vco = 8100 },
+	{ .freq = 617140, .vco = 8640 },
+	{ .freq = 675000, .vco = 8100 },
+};
+
+static unsigned int skl_cdclk_decimal(unsigned int freq)
+{
+	return (freq - 1000) / 500;
+}
+
+static unsigned int skl_cdclk_get_vco(unsigned int freq)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(skl_cdclk_frequencies); i++) {
+		const struct skl_cdclk_entry *e = &skl_cdclk_frequencies[i];
+
+		if (e->freq == freq)
+			return e->vco;
+	}
+
+	return 8100;
+}
+
+static void
+skl_dpll0_enable(struct drm_i915_private *dev_priv, unsigned int required_vco)
+{
+	unsigned int min_freq;
+	u32 val;
+
+	/* select the minimum CDCLK before enabling DPLL 0 */
+	val = I915_READ(CDCLK_CTL);
+	val &= ~CDCLK_FREQ_SEL_MASK | ~CDCLK_FREQ_DECIMAL_MASK;
+	val |= CDCLK_FREQ_337_308;
+
+	if (required_vco == 8640)
+		min_freq = 308570;
+	else
+		min_freq = 337500;
+
+	val = CDCLK_FREQ_337_308 | skl_cdclk_decimal(min_freq);
+
+	I915_WRITE(CDCLK_CTL, val);
+	POSTING_READ(CDCLK_CTL);
+
+	/*
+	 * We always enable DPLL0 with the lowest link rate possible, but still
+	 * taking into account the VCO required to operate the eDP panel at the
+	 * desired frequency. The usual DP link rates operate with a VCO of
+	 * 8100 while the eDP 1.4 alternate link rates need a VCO of 8640.
+	 * The modeset code is responsible for the selection of the exact link
+	 * rate later on, with the constraint of choosing a frequency that
+	 * works with required_vco.
+	 */
+	val = I915_READ(DPLL_CTRL1);
+
+	val &= ~(DPLL_CTRL1_HDMI_MODE(SKL_DPLL0) | DPLL_CTRL1_SSC(SKL_DPLL0) |
+		 DPLL_CTRL1_LINK_RATE_MASK(SKL_DPLL0));
+	val |= DPLL_CTRL1_OVERRIDE(SKL_DPLL0);
+	if (required_vco == 8640)
+		val |= DPLL_CTRL1_LINK_RATE(DPLL_CTRL1_LINK_RATE_1080,
+					    SKL_DPLL0);
+	else
+		val |= DPLL_CTRL1_LINK_RATE(DPLL_CTRL1_LINK_RATE_810,
+					    SKL_DPLL0);
+
+	I915_WRITE(DPLL_CTRL1, val);
+	POSTING_READ(DPLL_CTRL1);
+
+	I915_WRITE(LCPLL1_CTL, I915_READ(LCPLL1_CTL) | LCPLL_PLL_ENABLE);
+
+	if (wait_for(I915_READ(LCPLL1_CTL) & LCPLL_PLL_LOCK, 5))
+		DRM_ERROR("DPLL0 not locked\n");
+}
+
+static bool skl_cdclk_pcu_ready(struct drm_i915_private *dev_priv)
+{
+	int ret;
+	u32 val;
+
+	/* inform PCU we want to change CDCLK */
+	val = SKL_CDCLK_PREPARE_FOR_CHANGE;
+	mutex_lock(&dev_priv->rps.hw_lock);
+	ret = sandybridge_pcode_read(dev_priv, SKL_PCODE_CDCLK_CONTROL, &val);
+	mutex_unlock(&dev_priv->rps.hw_lock);
+
+	return ret == 0 && (val & SKL_CDCLK_READY_FOR_CHANGE);
+}
+
+static bool skl_cdclk_wait_for_pcu_ready(struct drm_i915_private *dev_priv)
+{
+	unsigned int i;
+
+	for (i = 0; i < 15; i++) {
+		if (skl_cdclk_pcu_ready(dev_priv))
+			return true;
+		udelay(10);
+	}
+
+	return false;
+}
+
+static void skl_set_cdclk(struct drm_i915_private *dev_priv, unsigned int freq)
+{
+	u32 freq_select, pcu_ack;
+
+	DRM_DEBUG_DRIVER("Changing CDCLK to %dKHz\n", freq);
+
+	if (!skl_cdclk_wait_for_pcu_ready(dev_priv)) {
+		DRM_ERROR("failed to inform PCU about cdclk change\n");
+		return;
+	}
+
+	/* set CDCLK_CTL */
+	switch(freq) {
+	case 450000:
+	case 432000:
+		freq_select = CDCLK_FREQ_450_432;
+		pcu_ack = 1;
+		break;
+	case 540000:
+		freq_select = CDCLK_FREQ_540;
+		pcu_ack = 2;
+		break;
+	case 308570:
+	case 337500:
+	default:
+		freq_select = CDCLK_FREQ_337_308;
+		pcu_ack = 0;
+		break;
+	case 617140:
+	case 675000:
+		freq_select = CDCLK_FREQ_675_617;
+		pcu_ack = 3;
+		break;
+	}
+
+	I915_WRITE(CDCLK_CTL, freq_select | skl_cdclk_decimal(freq));
+	POSTING_READ(CDCLK_CTL);
+
+	/* inform PCU of the change */
+	mutex_lock(&dev_priv->rps.hw_lock);
+	sandybridge_pcode_write(dev_priv, SKL_PCODE_CDCLK_CONTROL, pcu_ack);
+	mutex_unlock(&dev_priv->rps.hw_lock);
+}
+
+void skl_uninit_cdclk(struct drm_i915_private *dev_priv)
+{
+	/* disable DBUF power */
+	I915_WRITE(DBUF_CTL, I915_READ(DBUF_CTL) & ~DBUF_POWER_REQUEST);
+	POSTING_READ(DBUF_CTL);
+
+	udelay(10);
+
+	if (I915_READ(DBUF_CTL) & DBUF_POWER_STATE)
+		DRM_ERROR("DBuf power disable timeout\n");
+
+	/* disable DPLL0 */
+	I915_WRITE(LCPLL1_CTL, I915_READ(LCPLL1_CTL) & ~LCPLL_PLL_ENABLE);
+	if (wait_for(!(I915_READ(LCPLL1_CTL) & LCPLL_PLL_LOCK), 1))
+		DRM_ERROR("Couldn't disable DPLL0\n");
+
+	intel_display_power_put(dev_priv, POWER_DOMAIN_PLLS);
+}
+
+void skl_init_cdclk(struct drm_i915_private *dev_priv)
+{
+	u32 val;
+	unsigned int required_vco;
+
+	/* enable PCH reset handshake */
+	val = I915_READ(HSW_NDE_RSTWRN_OPT);
+	I915_WRITE(HSW_NDE_RSTWRN_OPT, val | RESET_PCH_HANDSHAKE_ENABLE);
+
+	/* enable PG1 and Misc I/O */
+	intel_display_power_get(dev_priv, POWER_DOMAIN_PLLS);
+
+	/* DPLL0 not enabled (happens on early BIOS versions) */
+	if (!(I915_READ(LCPLL1_CTL) & LCPLL_PLL_ENABLE)) {
+		/* enable DPLL0 */
+		required_vco = skl_cdclk_get_vco(dev_priv->skl_boot_cdclk);
+		skl_dpll0_enable(dev_priv, required_vco);
+	}
+
+	/* set CDCLK to the frequency the BIOS chose */
+	skl_set_cdclk(dev_priv, dev_priv->skl_boot_cdclk);
+
+	/* enable DBUF power */
+	I915_WRITE(DBUF_CTL, I915_READ(DBUF_CTL) | DBUF_POWER_REQUEST);
+	POSTING_READ(DBUF_CTL);
+
+	udelay(10);
+
+	if (!(I915_READ(DBUF_CTL) & DBUF_POWER_STATE))
+		DRM_ERROR("DBuf power enable timeout\n");
+}
+
 /* returns HPLL frequency in kHz */
 static int valleyview_get_vco(struct drm_i915_private *dev_priv)
 {
@@ -5557,7 +5762,7 @@ static void intel_crtc_disable(struct drm_crtc *crtc)
 	dev_priv->display.crtc_disable(crtc);
 	dev_priv->display.off(crtc);
 
-	crtc->primary->funcs->disable_plane(crtc->primary);
+	drm_plane_helper_disable(crtc->primary);
 
 	/* Update computed state. */
 	list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
@@ -11616,11 +11821,11 @@ static int __intel_set_mode(struct drm_crtc *crtc,
 		int vdisplay, hdisplay;
 
 		drm_crtc_get_hv_timing(mode, &hdisplay, &vdisplay);
-		ret = primary->funcs->update_plane(primary, &intel_crtc->base,
-						   fb, 0, 0,
-						   hdisplay, vdisplay,
-						   x << 16, y << 16,
-						   hdisplay << 16, vdisplay << 16);
+		ret = drm_plane_helper_update(primary, &intel_crtc->base,
+					      fb, 0, 0,
+					      hdisplay, vdisplay,
+					      x << 16, y << 16,
+					      hdisplay << 16, vdisplay << 16);
 	}
 
 	/* Now enable the clocks, plane, pipe, and connectors that we set up. */
@@ -12185,10 +12390,10 @@ static int intel_crtc_set_config(struct drm_mode_set *set)
 		int vdisplay, hdisplay;
 
 		drm_crtc_get_hv_timing(set->mode, &hdisplay, &vdisplay);
-		ret = primary->funcs->update_plane(primary, set->crtc, set->fb,
-						   0, 0, hdisplay, vdisplay,
-						   set->x << 16, set->y << 16,
-						   hdisplay << 16, vdisplay << 16);
+		ret = drm_plane_helper_update(primary, set->crtc, set->fb,
+					      0, 0, hdisplay, vdisplay,
+					      set->x << 16, set->y << 16,
+					      hdisplay << 16, vdisplay << 16);
 
 		/*
 		 * We need to make sure the primary plane is re-enabled if it
@@ -12685,8 +12890,8 @@ void intel_plane_destroy(struct drm_plane *plane)
 }
 
 const struct drm_plane_funcs intel_plane_funcs = {
-	.update_plane = drm_plane_helper_update,
-	.disable_plane = drm_plane_helper_disable,
+	.update_plane = drm_atomic_helper_update_plane,
+	.disable_plane = drm_atomic_helper_disable_plane,
 	.destroy = intel_plane_destroy,
 	.set_property = drm_atomic_helper_plane_set_property,
 	.atomic_get_property = intel_plane_atomic_get_property,

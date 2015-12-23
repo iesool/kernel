@@ -910,6 +910,7 @@ static int gen9_init_workarounds(struct intel_engine_cs *ring)
 {
 	struct drm_device *dev = ring->dev;
 	struct drm_i915_private *dev_priv = dev->dev_private;
+	uint32_t tmp;
 
 	/* WaDisablePartialInstShootdown:skl */
 	WA_SET_BIT_MASKED(GEN8_ROW_CHICKEN,
@@ -960,6 +961,12 @@ static int gen9_init_workarounds(struct intel_engine_cs *ring)
 	/* WaCcsTlbPrefetchDisable:skl */
 	WA_CLR_BIT_MASKED(GEN9_HALF_SLICE_CHICKEN5,
 			  GEN9_CCS_TLB_PREFETCH_ENABLE);
+
+	/* WaForceContextSaveRestoreNonCoherent:skl,bxt */
+	tmp = HDC_FORCE_CONTEXT_SAVE_RESTORE_NON_COHERENT;
+	if (IS_SKYLAKE(dev) && INTEL_REVID(dev) == SKL_REVID_F0)
+		tmp |= HDC_FORCE_CSR_NON_COHERENT_OVR_DISABLE;
+	WA_SET_BIT_MASKED(HDC_CHICKEN0, tmp);
 
 	return 0;
 }

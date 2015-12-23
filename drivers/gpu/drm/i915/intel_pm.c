@@ -67,7 +67,7 @@ static void skl_init_clock_gating(struct drm_device *dev)
 
 	gen9_init_clock_gating(dev);
 
-	if (INTEL_REVID(dev) == SKL_REVID_A0) {
+	if (INTEL_REVID(dev) <= SKL_REVID_B0) {
 		/*
 		 * WaDisableSDEUnitClockGating:skl
 		 * WaSetGAPSunitClckGateDisable:skl
@@ -75,6 +75,10 @@ static void skl_init_clock_gating(struct drm_device *dev)
 		I915_WRITE(GEN8_UCGCTL6, I915_READ(GEN8_UCGCTL6) |
 			   GEN8_GAPSUNIT_CLOCK_GATE_DISABLE |
 			   GEN8_SDEUNIT_CLOCK_GATE_DISABLE);
+
+		/* WaDisableVFUnitClockGating:skl */
+		I915_WRITE(GEN6_UCGCTL2, I915_READ(GEN6_UCGCTL2) |
+			   GEN6_VFUNIT_CLOCK_GATE_DISABLE);
 	}
 
 	if (INTEL_REVID(dev) <= SKL_REVID_D0) {
@@ -84,8 +88,7 @@ static void skl_init_clock_gating(struct drm_device *dev)
 
 		/* WaDisableChickenBitTSGBarrierAckForFFSliceCS:skl */
 		I915_WRITE(FF_SLICE_CS_CHICKEN2,
-			   I915_READ(FF_SLICE_CS_CHICKEN2) |
-			   GEN9_TSG_BARRIER_ACK_DISABLE);
+			   _MASKED_BIT_ENABLE(GEN9_TSG_BARRIER_ACK_DISABLE));
 	}
 
 	if (INTEL_REVID(dev) <= SKL_REVID_E0)

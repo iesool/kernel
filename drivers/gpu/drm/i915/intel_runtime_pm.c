@@ -49,6 +49,9 @@
  * present for a given platform.
  */
 
+#define GEN9_ENABLE_DC5(dev) 0
+#define SKL_ENABLE_DC6(dev) IS_SKYLAKE(dev)
+
 #define for_each_power_well(i, power_well, domain_mask, power_domains)	\
 	for (i = 0;							\
 	     i < (power_domains)->power_well_count &&			\
@@ -308,7 +311,9 @@ static void hsw_set_power_well(struct drm_i915_private *dev_priv,
 	BIT(POWER_DOMAIN_PORT_DDI_D_4_LANES) |		\
 	BIT(POWER_DOMAIN_INIT))
 #define SKL_DISPLAY_MISC_IO_POWER_DOMAINS (		\
-	SKL_DISPLAY_POWERWELL_1_POWER_DOMAINS)
+	SKL_DISPLAY_POWERWELL_1_POWER_DOMAINS |		\
+	BIT(POWER_DOMAIN_PLLS) |			\
+	BIT(POWER_DOMAIN_INIT))
 #define SKL_DISPLAY_ALWAYS_ON_POWER_DOMAINS (		\
 	(POWER_DOMAIN_MASK & ~(SKL_DISPLAY_POWERWELL_1_POWER_DOMAINS |	\
 	SKL_DISPLAY_POWERWELL_2_POWER_DOMAINS |		\
@@ -319,9 +324,90 @@ static void hsw_set_power_well(struct drm_i915_private *dev_priv,
 	SKL_DISPLAY_MISC_IO_POWER_DOMAINS)) |		\
 	BIT(POWER_DOMAIN_INIT))
 
+static void gen9_set_dc_state_debugmask_memory_up(
+			struct drm_i915_private *dev_priv)
+{
+	uint32_t val;
+
+	/* The below bit doesn't need to be cleared ever afterwards */
+	val = I915_READ(DC_STATE_DEBUG);
+	if (!(val & DC_STATE_DEBUG_MASK_MEMORY_UP)) {
+		val |= DC_STATE_DEBUG_MASK_MEMORY_UP;
+		I915_WRITE(DC_STATE_DEBUG, val);
+		POSTING_READ(DC_STATE_DEBUG);
+	}
+}
+
+static void gen9_enable_dc5(struct drm_i915_private *dev_priv)
+{
+	struct drm_device *dev = dev_priv->dev;
+	uint32_t val;
+
+	WARN_ON(!IS_GEN9(dev));
+
+	DRM_DEBUG_KMS("Enabling DC5\n");
+
+	gen9_set_dc_state_debugmask_memory_up(dev_priv);
+
+	val = I915_READ(DC_STATE_EN);
+	val &= ~DC_STATE_EN_UPTO_DC5_DC6_MASK;
+	val |= DC_STATE_EN_UPTO_DC5;
+	I915_WRITE(DC_STATE_EN, val);
+	POSTING_READ(DC_STATE_EN);
+}
+
+static void gen9_disable_dc5(struct drm_i915_private *dev_priv)
+{
+	struct drm_device *dev = dev_priv->dev;
+	uint32_t val;
+
+	WARN_ON(!IS_GEN9(dev));
+
+	DRM_DEBUG_KMS("Disabling DC5\n");
+
+	val = I915_READ(DC_STATE_EN);
+	val &= ~DC_STATE_EN_UPTO_DC5;
+	I915_WRITE(DC_STATE_EN, val);
+	POSTING_READ(DC_STATE_EN);
+}
+
+static void skl_enable_dc6(struct drm_i915_private *dev_priv)
+{
+	struct drm_device *dev = dev_priv->dev;
+	uint32_t val;
+
+	WARN_ON(!IS_SKYLAKE(dev));
+
+	DRM_DEBUG_KMS("Enabling DC6\n");
+
+	gen9_set_dc_state_debugmask_memory_up(dev_priv);
+
+	val = I915_READ(DC_STATE_EN);
+	val &= ~DC_STATE_EN_UPTO_DC5_DC6_MASK;
+	val |= DC_STATE_EN_UPTO_DC6;
+	I915_WRITE(DC_STATE_EN, val);
+	POSTING_READ(DC_STATE_EN);
+}
+
+static void skl_disable_dc6(struct drm_i915_private *dev_priv)
+{
+	struct drm_device *dev = dev_priv->dev;
+	uint32_t val;
+
+	WARN_ON(!IS_SKYLAKE(dev));
+
+	DRM_DEBUG_KMS("Disabling DC6\n");
+
+	val = I915_READ(DC_STATE_EN);
+	val &= ~DC_STATE_EN_UPTO_DC6;
+	I915_WRITE(DC_STATE_EN, val);
+	POSTING_READ(DC_STATE_EN);
+}
+
 static void skl_set_power_well(struct drm_i915_private *dev_priv,
 			struct i915_power_well *power_well, bool enable)
 {
+	struct drm_device *dev = dev_priv->dev;
 	uint32_t tmp, fuse_status;
 	uint32_t req_mask, state_mask;
 	bool is_enabled, enable_requested, check_fuse_status = false;
@@ -361,6 +447,25 @@ static void skl_set_power_well(struct drm_i915_private *dev_priv,
 
 	if (enable) {
 		if (!enable_requested) {
+			WARN((tmp & state_mask) &&
+				!I915_READ(HSW_PWR_WELL_BIOS),
+				"Invalid for power well status to be enabled, unless done by the BIOS, \
+				when request is to disable!\n");
+			if ((GEN9_ENABLE_DC5(dev) || SKL_ENABLE_DC6(dev)) &&
+				power_well->data == SKL_DISP_PW_2) {
+				if (SKL_ENABLE_DC6(dev)) {
+					skl_disable_dc6(dev_priv);
+					/*
+					 * DDI buffer programming unnecessary during driver-load/resume
+					 * as it's already done during modeset initialization then.
+					 * It's also invalid here as encoder list is still uninitialized.
+					 */
+					if (!dev_priv->power_domains.initializing)
+						intel_prepare_ddi(dev);
+				} else {
+					gen9_disable_dc5(dev_priv);
+				}
+			}
 			I915_WRITE(HSW_PWR_WELL_DRIVER, tmp | req_mask);
 		}
 
@@ -377,6 +482,25 @@ static void skl_set_power_well(struct drm_i915_private *dev_priv,
 			I915_WRITE(HSW_PWR_WELL_DRIVER,	tmp & ~req_mask);
 			POSTING_READ(HSW_PWR_WELL_DRIVER);
 			DRM_DEBUG_KMS("Disabling %s\n", power_well->name);
+
+			if ((GEN9_ENABLE_DC5(dev) || SKL_ENABLE_DC6(dev)) &&
+				power_well->data == SKL_DISP_PW_2) {
+				enum csr_state state;
+				/* TODO: wait for a completion event or
+				 * similar here instead of busy
+				 * waiting using wait_for function.
+				 */
+				wait_for((state = intel_csr_load_status_get(dev_priv)) !=
+						FW_UNINITIALIZED, 1000);
+				if (state != FW_LOADED)
+					DRM_ERROR("CSR firmware not ready (%d)\n",
+							state);
+				else
+					if (SKL_ENABLE_DC6(dev))
+						skl_enable_dc6(dev_priv);
+					else
+						gen9_enable_dc5(dev_priv);
+			}
 		}
 	}
 

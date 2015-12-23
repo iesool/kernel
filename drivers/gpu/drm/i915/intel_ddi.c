@@ -783,26 +783,26 @@ static void skl_ddi_clock_get(struct intel_encoder *encoder,
 	if (dpll_ctl1 & DPLL_CTRL1_HDMI_MODE(dpll)) {
 		link_clock = skl_calc_wrpll_link(dev_priv, dpll);
 	} else {
-		link_clock = dpll_ctl1 & DPLL_CRTL1_LINK_RATE_MASK(dpll);
-		link_clock >>= DPLL_CRTL1_LINK_RATE_SHIFT(dpll);
+		link_clock = dpll_ctl1 & DPLL_CTRL1_LINK_RATE_MASK(dpll);
+		link_clock >>= DPLL_CTRL1_LINK_RATE_SHIFT(dpll);
 
 		switch (link_clock) {
-		case DPLL_CRTL1_LINK_RATE_810:
+		case DPLL_CTRL1_LINK_RATE_810:
 			link_clock = 81000;
 			break;
-		case DPLL_CRTL1_LINK_RATE_1080:
+		case DPLL_CTRL1_LINK_RATE_1080:
 			link_clock = 108000;
 			break;
-		case DPLL_CRTL1_LINK_RATE_1350:
+		case DPLL_CTRL1_LINK_RATE_1350:
 			link_clock = 135000;
 			break;
-		case DPLL_CRTL1_LINK_RATE_1620:
+		case DPLL_CTRL1_LINK_RATE_1620:
 			link_clock = 162000;
 			break;
-		case DPLL_CRTL1_LINK_RATE_2160:
+		case DPLL_CTRL1_LINK_RATE_2160:
 			link_clock = 216000;
 			break;
-		case DPLL_CRTL1_LINK_RATE_2700:
+		case DPLL_CTRL1_LINK_RATE_2700:
 			link_clock = 270000;
 			break;
 		default:
@@ -1179,13 +1179,13 @@ skl_ddi_pll_select(struct intel_crtc *intel_crtc,
 
 		switch (intel_dp->link_bw) {
 		case DP_LINK_BW_1_62:
-			ctrl1 |= DPLL_CRTL1_LINK_RATE(DPLL_CRTL1_LINK_RATE_810, 0);
+			ctrl1 |= DPLL_CTRL1_LINK_RATE(DPLL_CTRL1_LINK_RATE_810, 0);
 			break;
 		case DP_LINK_BW_2_7:
-			ctrl1 |= DPLL_CRTL1_LINK_RATE(DPLL_CRTL1_LINK_RATE_1350, 0);
+			ctrl1 |= DPLL_CTRL1_LINK_RATE(DPLL_CTRL1_LINK_RATE_1350, 0);
 			break;
 		case DP_LINK_BW_5_4:
-			ctrl1 |= DPLL_CRTL1_LINK_RATE(DPLL_CRTL1_LINK_RATE_2700, 0);
+			ctrl1 |= DPLL_CTRL1_LINK_RATE(DPLL_CTRL1_LINK_RATE_2700, 0);
 			break;
 		}
 
@@ -1548,7 +1548,7 @@ static void intel_ddi_pre_enable(struct intel_encoder *intel_encoder)
 
 			val &= ~(DPLL_CTRL1_HDMI_MODE(dpll) |
 				 DPLL_CTRL1_SSC(dpll) |
-				 DPLL_CRTL1_LINK_RATE_MASK(dpll));
+				 DPLL_CTRL1_LINK_RATE_MASK(dpll));
 			val |= crtc->config->dpll_hw_state.ctrl1 << (dpll * 6);
 
 			I915_WRITE(DPLL_CTRL1, val);
@@ -1704,10 +1704,10 @@ static int skl_get_cdclk_freq(struct drm_i915_private *dev_priv)
 		return 540000;
 
 	linkrate = (I915_READ(DPLL_CTRL1) &
-		    DPLL_CRTL1_LINK_RATE_MASK(SKL_DPLL0)) >> 1;
+		    DPLL_CTRL1_LINK_RATE_MASK(SKL_DPLL0)) >> 1;
 
-	if (linkrate == DPLL_CRTL1_LINK_RATE_2160 ||
-	    linkrate == DPLL_CRTL1_LINK_RATE_1080) {
+	if (linkrate == DPLL_CTRL1_LINK_RATE_2160 ||
+	    linkrate == DPLL_CTRL1_LINK_RATE_1080) {
 		/* vco 8640 */
 		switch (cdctl & CDCLK_FREQ_SEL_MASK) {
 		case CDCLK_FREQ_450_432:
@@ -1887,7 +1887,7 @@ static void skl_ddi_pll_enable(struct drm_i915_private *dev_priv,
 	val = I915_READ(DPLL_CTRL1);
 
 	val &= ~(DPLL_CTRL1_HDMI_MODE(dpll) | DPLL_CTRL1_SSC(dpll) |
-		 DPLL_CRTL1_LINK_RATE_MASK(dpll));
+		 DPLL_CTRL1_LINK_RATE_MASK(dpll));
 	val |= pll->config.hw_state.ctrl1 << (dpll * 6);
 
 	I915_WRITE(DPLL_CTRL1, val);
@@ -1967,18 +1967,22 @@ void intel_ddi_pll_init(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	uint32_t val = I915_READ(LCPLL_CTL);
+	int cdclk_freq;
 
 	if (IS_SKYLAKE(dev))
 		skl_shared_dplls_init(dev_priv);
 	else
 		hsw_shared_dplls_init(dev_priv);
 
-	DRM_DEBUG_KMS("CDCLK running at %dKHz\n",
-		      intel_ddi_get_cdclk_freq(dev_priv));
+	cdclk_freq = intel_ddi_get_cdclk_freq(dev_priv);
+	DRM_DEBUG_KMS("CDCLK running at %dKHz\n", cdclk_freq);
 
 	if (IS_SKYLAKE(dev)) {
+		dev_priv->skl_boot_cdclk = cdclk_freq;
 		if (!(I915_READ(LCPLL1_CTL) & LCPLL_PLL_ENABLE))
 			DRM_ERROR("LCPLL1 is disabled\n");
+		else
+			intel_display_power_get(dev_priv, POWER_DOMAIN_PLLS);
 	} else {
 		/*
 		 * The LCPLL register should be turned on by the BIOS. For now

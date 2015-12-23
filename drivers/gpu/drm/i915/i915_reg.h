@@ -5298,13 +5298,16 @@ enum skl_disp_power_wells {
 #define  DISP_FBC_WM_DIS		(1<<15)
 #define DISP_ARB_CTL2	0x45004
 #define  DISP_DATA_PARTITION_5_6	(1<<6)
+#define DBUF_CTL	0x45008
+#define  DBUF_POWER_REQUEST		(1<<31)
+#define  DBUF_POWER_STATE		(1<<30)
 #define GEN7_MSG_CTL	0x45010
 #define  WAIT_FOR_PCH_RESET_ACK		(1<<1)
 #define  WAIT_FOR_PCH_FLR_ACK		(1<<0)
 #define HSW_NDE_RSTWRN_OPT	0x46408
 #define  RESET_PCH_HANDSHAKE_ENABLE	(1<<4)
 
-#define FF_SLICE_CS_CHICKEN2			0x02e4
+#define FF_SLICE_CS_CHICKEN2			0x20e4
 #define  GEN9_TSG_BARRIER_ACK_DISABLE		(1<<8)
 
 /* GEN7 chicken */
@@ -5341,6 +5344,7 @@ enum skl_disp_power_wells {
 
 /* GEN8 chicken */
 #define HDC_CHICKEN0				0x7300
+#define  HDC_FORCE_CSR_NON_COHERENT_OVR_DISABLE	(1<<15)
 #define  HDC_FENCE_DEST_SLM_DISABLE		(1<<14)
 #define  HDC_DONOT_FETCH_MEM_WHEN_MASKED	(1<<11)
 #define  HDC_FORCE_CONTEXT_SAVE_RESTORE_NON_COHERENT	(1<<5)
@@ -6089,6 +6093,7 @@ enum skl_disp_power_wells {
 # define GEN6_CSUNIT_CLOCK_GATE_DISABLE			(1 << 7)
 
 #define GEN6_UCGCTL2				0x9404
+# define GEN6_VFUNIT_CLOCK_GATE_DISABLE			(1 << 31)
 # define GEN7_VDSUNIT_CLOCK_GATE_DISABLE		(1 << 30)
 # define GEN7_TDLUNIT_CLOCK_GATE_DISABLE		(1 << 22)
 # define GEN6_RCZUNIT_CLOCK_GATE_DISABLE		(1 << 13)
@@ -6232,6 +6237,9 @@ enum skl_disp_power_wells {
 #define GEN6_PCODE_MAILBOX			0x138124
 #define   GEN6_PCODE_READY			(1<<31)
 #define   GEN6_READ_OC_PARAMS			0xc
+#define   SKL_PCODE_CDCLK_CONTROL		0x7
+#define     SKL_CDCLK_PREPARE_FOR_CHANGE	0x3
+#define     SKL_CDCLK_READY_FOR_CHANGE		0x1
 #define   GEN6_PCODE_WRITE_MIN_FREQ_TABLE	0x8
 #define   GEN6_PCODE_READ_MIN_FREQ_TABLE	0x9
 #define	  GEN6_PCODE_WRITE_RC6VIDS		0x4
@@ -6725,16 +6733,16 @@ enum skl_disp_power_wells {
 #define DPLL_CTRL1		0x6C058
 #define  DPLL_CTRL1_HDMI_MODE(id)		(1<<((id)*6+5))
 #define  DPLL_CTRL1_SSC(id)			(1<<((id)*6+4))
-#define  DPLL_CRTL1_LINK_RATE_MASK(id)		(7<<((id)*6+1))
-#define  DPLL_CRTL1_LINK_RATE_SHIFT(id)		((id)*6+1)
-#define  DPLL_CRTL1_LINK_RATE(linkrate, id)	((linkrate)<<((id)*6+1))
+#define  DPLL_CTRL1_LINK_RATE_MASK(id)		(7<<((id)*6+1))
+#define  DPLL_CTRL1_LINK_RATE_SHIFT(id)		((id)*6+1)
+#define  DPLL_CTRL1_LINK_RATE(linkrate, id)	((linkrate)<<((id)*6+1))
 #define  DPLL_CTRL1_OVERRIDE(id)		(1<<((id)*6))
-#define  DPLL_CRTL1_LINK_RATE_2700		0
-#define  DPLL_CRTL1_LINK_RATE_1350		1
-#define  DPLL_CRTL1_LINK_RATE_810		2
-#define  DPLL_CRTL1_LINK_RATE_1620		3
-#define  DPLL_CRTL1_LINK_RATE_1080		4
-#define  DPLL_CRTL1_LINK_RATE_2160		5
+#define  DPLL_CTRL1_LINK_RATE_2700		0
+#define  DPLL_CTRL1_LINK_RATE_1350		1
+#define  DPLL_CTRL1_LINK_RATE_810		2
+#define  DPLL_CTRL1_LINK_RATE_1620		3
+#define  DPLL_CTRL1_LINK_RATE_1080		4
+#define  DPLL_CTRL1_LINK_RATE_2160		5
 
 /* DPLL control2 */
 #define DPLL_CTRL2				0x6C05C
@@ -6779,6 +6787,17 @@ enum skl_disp_power_wells {
 
 #define GET_CFG_CR1_REG(id) (DPLL1_CFGCR1 + (id - SKL_DPLL1) * 8)
 #define GET_CFG_CR2_REG(id) (DPLL1_CFGCR2 + (id - SKL_DPLL1) * 8)
+
+/*
+* SKL DC
+*/
+#define  DC_STATE_EN			0x45504
+#define  DC_STATE_EN_UPTO_DC5		(1<<0)
+#define  DC_STATE_EN_UPTO_DC6		(2<<0)
+#define  DC_STATE_EN_UPTO_DC5_DC6_MASK   0x3
+
+#define  DC_STATE_DEBUG                  0x45520
+#define  DC_STATE_DEBUG_MASK_MEMORY_UP	(1<<1)
 
 /* Please see hsw_read_dcomp() and hsw_write_dcomp() before using this register,
  * since on HSW we can't write to it using I915_WRITE. */

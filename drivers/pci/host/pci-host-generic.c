@@ -303,7 +303,7 @@ static int gen_pci_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct device_node *np = dev->of_node;
 	struct gen_pci *pci = devm_kzalloc(dev, sizeof(*pci), GFP_KERNEL);
-	struct pci_bus *bus;
+	struct pci_bus *bus, *child;
 
 	if (!pci)
 		return -ENOMEM;
@@ -317,6 +317,7 @@ static int gen_pci_probe(struct platform_device *pdev)
 	of_pci_check_probe_only();
 
 	of_id = of_match_node(gen_pci_of_match, np);
+	set_dev_node(dev, of_node_to_nid(np));
 	pci->cfg.ops = (struct gen_pci_cfg_bus_ops *)of_id->data;
 	pci->host.dev.parent = dev;
 	INIT_LIST_HEAD(&pci->host.windows);
@@ -334,11 +335,12 @@ static int gen_pci_probe(struct platform_device *pdev)
 		return err;
 	}
 
-	/* do not reassign resource if probe only */
+	/* Do not reassign resource if probe only */
 	if (!pci_has_flag(PCI_PROBE_ONLY))
 		pci_add_flags(PCI_REASSIGN_ALL_RSRC | PCI_REASSIGN_ALL_BUS);
 
-	bus = pci_scan_root_bus(dev, 0,
+
+	bus = pci_scan_root_bus(dev, pci->cfg.bus_range->start,
 				&pci->cfg.ops->ops, pci, &pci->resources);
 	if (!bus) {
 		dev_err(dev, "Scanning rootbus failed");
@@ -351,16 +353,12 @@ static int gen_pci_probe(struct platform_device *pdev)
 	if (!pci_has_flag(PCI_PROBE_ONLY)) {
 		pci_bus_size_bridges(bus);
 		pci_bus_assign_resources(bus);
-	}
-	pci_bus_add_devices(bus);
-
-	/* Configure PCI Express settings */
-	if (!pci_has_flag(PCI_PROBE_ONLY)) {
-		struct pci_bus *child;
 
 		list_for_each_entry(child, &bus->children, node)
 			pcie_bus_configure_settings(child);
 	}
+
+	pci_bus_add_devices(bus);
 	return 0;
 }
 

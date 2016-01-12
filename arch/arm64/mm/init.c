@@ -37,12 +37,12 @@
 
 #include <asm/fixmap.h>
 #include <asm/memory.h>
+#include <asm/numa.h>
 #include <asm/sections.h>
 #include <asm/setup.h>
 #include <asm/sizes.h>
 #include <asm/tlb.h>
 #include <asm/alternative.h>
-#include <asm/numa.h>
 
 #include "mm.h"
 
@@ -81,9 +81,8 @@ static phys_addr_t max_zone_dma_phys(void)
 #ifdef CONFIG_NUMA
 static void __init zone_sizes_init(unsigned long min, unsigned long max)
 {
-	unsigned long max_zone_pfns[MAX_NR_ZONES];
+	unsigned long max_zone_pfns[MAX_NR_ZONES]  = {0};
 
-	memset(max_zone_pfns, 0, sizeof(max_zone_pfns));
 	if (IS_ENABLED(CONFIG_ZONE_DMA))
 		max_zone_pfns[ZONE_DMA] = PFN_DOWN(max_zone_dma_phys());
 	max_zone_pfns[ZONE_NORMAL] = max;
@@ -202,7 +201,6 @@ void __init arm64_memblock_init(void)
 	dma_contiguous_reserve(arm64_dma_phys_limit);
 
 	memblock_allow_resize();
-	memblock_dump_all();
 }
 
 void __init bootmem_init(void)
@@ -214,7 +212,6 @@ void __init bootmem_init(void)
 
 	early_memtest(min << PAGE_SHIFT, max << PAGE_SHIFT);
 
-	high_memory = __va((max << PAGE_SHIFT) - 1) + 1;
 	max_pfn = max_low_pfn = max;
 
 	arm64_numa_init();
@@ -226,6 +223,8 @@ void __init bootmem_init(void)
 
 	sparse_init();
 	zone_sizes_init(min, max);
+
+	high_memory = __va((max << PAGE_SHIFT) - 1) + 1;
 }
 
 #ifndef CONFIG_SPARSEMEM_VMEMMAP

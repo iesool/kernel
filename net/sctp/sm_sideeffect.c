@@ -391,7 +391,7 @@ void sctp_generate_heartbeat_event(unsigned long data)
 			   asoc->state, asoc->ep, asoc,
 			   transport, GFP_ATOMIC);
 
-	if (error)
+	 if (error)
 		sk->sk_err = -error;
 
 out_unlock:

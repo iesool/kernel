@@ -422,7 +422,7 @@ static void snd_timer_notify1(struct snd_timer_instance *ti, int event)
 	spin_lock_irqsave(&timer->lock, flags);
 	list_for_each_entry(ts, &ti->slave_active_head, active_list)
 		if (ts->ccallback)
-			ts->ccallback(ti, event + 100, &tstamp, resolution);
+			ts->ccallback(ts, event + 100, &tstamp, resolution);
 	spin_unlock_irqrestore(&timer->lock, flags);
 }
 
@@ -518,9 +518,13 @@ static int _snd_timer_stop(struct snd_timer_instance *timeri, int event)
 			spin_unlock_irqrestore(&slave_active_lock, flags);
 			return -EBUSY;
 		}
+		if (timeri->timer)
+			spin_lock(&timeri->timer->lock);
 		timeri->flags &= ~SNDRV_TIMER_IFLG_RUNNING;
 		list_del_init(&timeri->ack_list);
 		list_del_init(&timeri->active_list);
+		if (timeri->timer)
+			spin_unlock(&timeri->timer->lock);
 		spin_unlock_irqrestore(&slave_active_lock, flags);
 		goto __end;
 	}

@@ -79,6 +79,7 @@ static phys_addr_t max_zone_dma_phys(void)
 }
 
 #ifdef CONFIG_NUMA
+
 static void __init zone_sizes_init(unsigned long min, unsigned long max)
 {
 	unsigned long max_zone_pfns[MAX_NR_ZONES]  = {0};
@@ -91,6 +92,7 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 }
 
 #else
+
 static void __init zone_sizes_init(unsigned long min, unsigned long max)
 {
 	struct memblock_region *reg;
@@ -129,6 +131,7 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 
 	free_area_init_node(0, zone_size, min, zhole_size);
 }
+
 #endif /* CONFIG_NUMA */
 
 #ifdef CONFIG_HAVE_ARCH_PFN_VALID
@@ -190,8 +193,7 @@ void __init arm64_memblock_init(void)
 		memblock_reserve(__virt_to_phys(initrd_start), initrd_end - initrd_start);
 #endif
 
-	if (!efi_enabled(EFI_MEMMAP))
-		early_init_fdt_scan_reserved_mem();
+	early_init_fdt_scan_reserved_mem();
 
 	/* 4GB maximum for 32-bit only capable devices */
 	if (IS_ENABLED(CONFIG_ZONE_DMA))
@@ -400,16 +402,6 @@ __setup("keepinitrd", keepinitrd_setup);
 void __init early_init_dt_add_memory_arch(u64 base, u64 size)
 {
 	const u64 phys_offset = __pa(PAGE_OFFSET);
-
-	/*
-	 * This callback will be invoked both when booting via UEFI and when
-	 * booting via DT only. In the former case, we need to ignore memory
-	 * nodes in the DT since UEFI is authoritative when it comes to the
-	 * memory map. So ignore any invocations of this callback after
-	 * EFI_MEMMAP has been set.
-	 */
-	if (efi_enabled(EFI_MEMMAP))
-		return;
 
 	if (!PAGE_ALIGNED(base)) {
 		if (size < PAGE_SIZE - (base & ~PAGE_MASK)) {

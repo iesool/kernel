@@ -10,6 +10,7 @@ config ARM64
 	select ARCH_HAS_TICK_BROADCAST if GENERIC_CLOCKEVENTS_BROADCAST
 	select ARCH_USE_CMPXCHG_LOCKREF
 	select ARCH_SUPPORTS_ATOMIC_RMW
+	select ARCH_SUPPORTS_NUMA_BALANCING
 	select ARCH_WANT_OPTIONAL_GPIOLIB
 	select ARCH_WANT_COMPAT_IPC_PARSE_VERSION
 	select ARCH_WANT_FRAME_POINTERS
@@ -86,6 +87,7 @@ config ARM64
 	select SPARSE_IRQ
 	select SYSCTL_EXCEPTION_TRACE
 	select HAVE_CONTEXT_TRACKING
+	select OF_NUMA if NUMA && OF
 	help
 	  ARM 64-bit (AArch64) Linux support.
 
@@ -595,16 +597,6 @@ config NUMA
 	  The kernel will try to allocate memory used by a CPU on the
 	  local memory of the CPU and add some more
 	  NUMA awareness to the kernel.
-
-config OF_NUMA
-	bool "Device Tree NUMA support"
-	depends on NUMA
-	depends on OF
-	default y
-	help
-	  Enable Device Tree NUMA support.
-	  This enables the numa mapping of cpu, memory, io and
-	  inter node distances using dt bindings.
 
 config NODES_SHIFT
 	int "Maximum NUMA Nodes (as a power of 2)"

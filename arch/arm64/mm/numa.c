@@ -18,28 +18,18 @@
  */
 
 #include <linux/bootmem.h>
-#include <linux/ctype.h>
-#include <linux/init.h>
-#include <linux/kernel.h>
-#include <linux/mm.h>
 #include <linux/memblock.h>
 #include <linux/module.h>
-#include <linux/mmzone.h>
-#include <linux/nodemask.h>
-#include <linux/sched.h>
-#include <linux/string.h>
-#include <linux/topology.h>
-
-#include <asm/smp_plat.h>
+#include <linux/of.h>
 
 struct pglist_data *node_data[MAX_NUMNODES] __read_mostly;
 EXPORT_SYMBOL(node_data);
 nodemask_t numa_nodes_parsed __initdata;
-int cpu_to_node_map[NR_CPUS] = { [0 ... NR_CPUS-1] = NUMA_NO_NODE };
+static int cpu_to_node_map[NR_CPUS] = { [0 ... NR_CPUS-1] = NUMA_NO_NODE };
 
-static int numa_off;
 static int numa_distance_cnt;
 static u8 *numa_distance;
+static int numa_off;
 
 static __init int numa_parse_early_param(char *opt)
 {
@@ -57,12 +47,12 @@ cpumask_var_t node_to_cpumask_map[MAX_NUMNODES];
 EXPORT_SYMBOL(node_to_cpumask_map);
 
 #ifdef CONFIG_DEBUG_PER_CPU_MAPS
+
 /*
  * Returns a pointer to the bitmask of CPUs on Node 'node'.
  */
 const struct cpumask *cpumask_of_node(int node)
 {
-
 	if (WARN_ON(node >= nr_node_ids))
 		return cpu_none_mask;
 
@@ -72,6 +62,7 @@ const struct cpumask *cpumask_of_node(int node)
 	return node_to_cpumask_map[node];
 }
 EXPORT_SYMBOL(cpumask_of_node);
+
 #endif
 
 static void map_cpu_to_node(unsigned int cpu, int nid)
@@ -81,18 +72,13 @@ static void map_cpu_to_node(unsigned int cpu, int nid)
 		cpumask_set_cpu(cpu, node_to_cpumask_map[nid]);
 }
 
-static void unmap_cpu_to_node(unsigned int cpu)
+void numa_clear_node(unsigned int cpu)
 {
 	int nid = cpu_to_node(cpu);
 
 	if (nid >= 0)
 		cpumask_clear_cpu(cpu, node_to_cpumask_map[nid]);
 	set_cpu_numa_node(cpu, NUMA_NO_NODE);
-}
-
-void numa_clear_node(unsigned int cpu)
-{
-	unmap_cpu_to_node(cpu);
 }
 
 /*
@@ -121,7 +107,7 @@ static void __init setup_node_to_cpumask_map(void)
 		set_cpu_numa_node(cpu, NUMA_NO_NODE);
 
 	/* cpumask_of_node() will now work */
-	pr_debug("Node to cpumask map for %d nodes\n", nr_node_ids);
+	pr_debug("NUMA: Node to cpumask map for %d nodes\n", nr_node_ids);
 }
 
 /*
@@ -130,6 +116,15 @@ static void __init setup_node_to_cpumask_map(void)
 void numa_store_cpu_info(unsigned int cpu)
 {
 	map_cpu_to_node(cpu, numa_off ? 0 : cpu_to_node_map[cpu]);
+}
+
+void __init early_map_cpu_to_node(unsigned int cpu, int nid)
+{
+	/* fallback to node 0 */
+	if (nid < 0 || nid >= MAX_NUMNODES)
+		nid = 0;
+
+	cpu_to_node_map[cpu] = nid;
 }
 
 /**
@@ -157,9 +152,10 @@ int __init numa_add_memblk(int nid, u64 start, u64 size)
 			start, (start + size - 1), nid);
 	return ret;
 }
-EXPORT_SYMBOL(numa_add_memblk);
 
-/* Initialize NODE_DATA for a node on the local memory */
+/**
+ * Initialize NODE_DATA for a node on the local memory
+ */
 static void __init setup_node_data(int nid, u64 start_pfn, u64 end_pfn)
 {
 	const size_t nd_size = roundup(sizeof(pg_data_t), SMP_CACHE_BYTES);
@@ -167,7 +163,7 @@ static void __init setup_node_data(int nid, u64 start_pfn, u64 end_pfn)
 	void *nd;
 	int tnid;
 
-	pr_info("Initmem setup node %d [mem %#010Lx-%#010Lx]\n",
+	pr_info("NUMA: Initmem setup node %d [mem %#010Lx-%#010Lx]\n",
 			nid, start_pfn << PAGE_SHIFT,
 			(end_pfn << PAGE_SHIFT) - 1);
 
@@ -175,11 +171,11 @@ static void __init setup_node_data(int nid, u64 start_pfn, u64 end_pfn)
 	nd = __va(nd_pa);
 
 	/* report and initialize */
-	pr_info("  NODE_DATA [mem %#010Lx-%#010Lx]\n",
+	pr_info("NUMA: NODE_DATA [mem %#010Lx-%#010Lx]\n",
 		nd_pa, nd_pa + nd_size - 1);
 	tnid = early_pfn_to_nid(nd_pa >> PAGE_SHIFT);
 	if (tnid != nid)
-		pr_info("    NODE_DATA(%d) on node %d\n", nid, tnid);
+		pr_info("NUMA: NODE_DATA(%d) on node %d\n", nid, tnid);
 
 	node_data[nid] = nd;
 	memset(NODE_DATA(nid), 0, sizeof(pg_data_t));
@@ -189,12 +185,11 @@ static void __init setup_node_data(int nid, u64 start_pfn, u64 end_pfn)
 }
 
 /**
- * numa_reset_distance - Reset NUMA distance table
+ * numa_free_distance
  *
  * The current table is freed.
- * The next numa_set_distance() call will create a new one.
  */
-void __init numa_reset_distance(void)
+void __init numa_free_distance(void)
 {
 	size_t size;
 
@@ -209,6 +204,11 @@ void __init numa_reset_distance(void)
 	numa_distance = NULL;
 }
 
+/**
+ *
+ * Create a new NUMA distance table.
+ *
+ */
 static int __init numa_alloc_distance(void)
 {
 	size_t size;
@@ -239,28 +239,24 @@ static int __init numa_alloc_distance(void)
 }
 
 /**
- * numa_set_distance - Set NUMA distance from one NUMA to another
+ * numa_set_distance - Set inter node NUMA distance from node to node.
  * @from: the 'from' node to set distance
  * @to: the 'to'  node to set distance
  * @distance: NUMA distance
  *
- * Set the distance from node @from to @to to @distance.  If distance table
- * doesn't exist, one which is large enough to accommodate all the currently
- * known nodes will be created.
- *
- * If such table cannot be allocated, a warning is printed and further
- * calls are ignored until the distance table is reset with
- * numa_reset_distance().
+ * Set the distance from node @from to @to to @distance.
+ * If distance table doesn't exist, a warning is printed.
  *
  * If @from or @to is higher than the highest known node or lower than zero
- * at the time of table creation or @distance doesn't make sense, the call
- * is ignored.
- * This is to allow simplification of specific NUMA config implementations.
+ * or @distance doesn't make sense, the call is ignored.
+ *
  */
 void __init numa_set_distance(int from, int to, int distance)
 {
-	if (!numa_distance)
+	if (!numa_distance) {
+		pr_warn_once("NUMA: Warning: distance table not allocated yet\n");
 		return;
+	}
 
 	if (from >= numa_distance_cnt || to >= numa_distance_cnt ||
 			from < 0 || to < 0) {
@@ -278,8 +274,10 @@ void __init numa_set_distance(int from, int to, int distance)
 
 	numa_distance[from * numa_distance_cnt + to] = distance;
 }
-EXPORT_SYMBOL(numa_set_distance);
 
+/**
+ * Return NUMA distance @from to @to
+ */
 int __node_distance(int from, int to)
 {
 	if (from >= numa_distance_cnt || to >= numa_distance_cnt)
@@ -295,8 +293,12 @@ static int __init numa_register_nodes(void)
 
 	/* Check that valid nid is set to memblks */
 	for_each_memblock(memory, mblk)
-		if (mblk->nid == NUMA_NO_NODE || mblk->nid >= MAX_NUMNODES)
+		if (mblk->nid == NUMA_NO_NODE || mblk->nid >= MAX_NUMNODES) {
+			pr_warn("NUMA: Warning: invalid memblk node %d [mem %#010Lx-%#010Lx]\n",
+				mblk->nid, mblk->base,
+				mblk->base + mblk->size - 1);
 			return -EINVAL;
+		}
 
 	/* Finally register nodes. */
 	for_each_node_mask(nid, numa_nodes_parsed) {
@@ -320,7 +322,11 @@ static int __init numa_init(int (*init_func)(void))
 	nodes_clear(numa_nodes_parsed);
 	nodes_clear(node_possible_map);
 	nodes_clear(node_online_map);
-	numa_reset_distance();
+	numa_free_distance();
+
+	ret = numa_alloc_distance();
+	if (ret < 0)
+		return ret;
 
 	ret = init_func();
 	if (ret < 0)
@@ -330,10 +336,6 @@ static int __init numa_init(int (*init_func)(void))
 		return -EINVAL;
 
 	ret = numa_register_nodes();
-	if (ret < 0)
-		return ret;
-
-	ret = numa_alloc_distance();
 	if (ret < 0)
 		return ret;
 
@@ -352,7 +354,7 @@ static int __init numa_init(int (*init_func)(void))
  * Used if there's no underlying NUMA architecture, NUMA initialization
  * fails, or NUMA is disabled on the command line.
  *
- * Must online at least one node(node 0) and add memory blocks that cover all
+ * Must online at least one node (node 0) and add memory blocks that cover all
  * allowed memory. It is unlikely that this function fails.
  */
 static int __init dummy_numa_init(void)
@@ -361,13 +363,16 @@ static int __init dummy_numa_init(void)
 	struct memblock_region *mblk;
 
 	pr_info("%s\n", "No NUMA configuration found");
-	pr_info("Faking a node at [mem %#018Lx-%#018Lx]\n",
+	pr_info("NUMA: Faking a node at [mem %#018Lx-%#018Lx]\n",
 	       0LLU, PFN_PHYS(max_pfn) - 1);
 
 	for_each_memblock(memory, mblk) {
 		ret = numa_add_memblk(0, mblk->base, mblk->size);
-		if (unlikely(ret < 0))
-			return ret;
+		if (!ret)
+			continue;
+
+		pr_err("NUMA init failed\n");
+		return ret;
 	}
 
 	numa_off = 1;
@@ -378,18 +383,14 @@ static int __init dummy_numa_init(void)
  * arm64_numa_init - Initialize NUMA
  *
  * Try each configured NUMA initialization method until one succeeds.  The
- * last fallback is dummy single node config encomapssing whole memory and
- * never fails.
+ * last fallback is dummy single node config encomapssing whole memory.
  */
 void __init arm64_numa_init(void)
 {
-	int ret = -ENODEV;
+	if (!numa_off) {
+		if (!numa_init(of_numa_init))
+			return;
+	}
 
-#ifdef CONFIG_OF_NUMA
-	if (!numa_off)
-		ret = numa_init(arm64_of_numa_init);
-#endif
-
-	if (ret)
-		numa_init(dummy_numa_init);
+	numa_init(dummy_numa_init);
 }

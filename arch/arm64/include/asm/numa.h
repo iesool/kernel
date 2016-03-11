@@ -1,7 +1,6 @@
 #ifndef __ASM_NUMA_H
 #define __ASM_NUMA_H
 
-#include <linux/nodemask.h>
 #include <asm/topology.h>
 
 #ifdef CONFIG_NUMA
@@ -9,23 +8,17 @@
 /* currently, arm64 implements flat NUMA topology */
 #define parent_node(node)	(node)
 
-extern int __node_distance(int from, int to);
+int __node_distance(int from, int to);
 #define node_distance(a, b) __node_distance(a, b)
 
-struct pci_bus;
-int pcibus_to_node(struct pci_bus *bus);
-#define cpumask_of_pcibus(bus)	(pcibus_to_node(bus) == -1 ?		\
-				 cpu_all_mask :				\
-				 cpumask_of_node(pcibus_to_node(bus)))
-
-extern int cpu_to_node_map[NR_CPUS];
 extern nodemask_t numa_nodes_parsed __initdata;
 
 /* Mappings between node number and cpus on that node. */
 extern cpumask_var_t node_to_cpumask_map[MAX_NUMNODES];
-extern void numa_clear_node(unsigned int cpu);
+void numa_clear_node(unsigned int cpu);
+
 #ifdef CONFIG_DEBUG_PER_CPU_MAPS
-extern const struct cpumask *cpumask_of_node(int node);
+const struct cpumask *cpumask_of_node(int node);
 #else
 /* Returns a pointer to the cpumask of CPUs on Node 'node'. */
 static inline const struct cpumask *cpumask_of_node(int node)
@@ -37,20 +30,16 @@ static inline const struct cpumask *cpumask_of_node(int node)
 void __init arm64_numa_init(void);
 int __init numa_add_memblk(int nodeid, u64 start, u64 end);
 void __init numa_set_distance(int from, int to, int distance);
-void __init numa_reset_distance(void);
+void __init numa_free_distance(void);
+void __init early_map_cpu_to_node(unsigned int cpu, int nid);
 void numa_store_cpu_info(unsigned int cpu);
-#else	/* CONFIG_NUMA */
-static inline void numa_store_cpu_info(unsigned int cpu)		{ }
-static inline void arm64_numa_init(void)		{ }
-#endif	/* CONFIG_NUMA */
 
-struct device_node;
-#ifdef CONFIG_OF_NUMA
-int __init arm64_of_numa_init(void);
-void __init of_numa_set_node_info(unsigned int cpu, struct device_node *dn);
-#else
-static inline void of_numa_set_node_info(unsigned int cpu,
-		struct device_node *dn) { }
-#endif
+#else	/* CONFIG_NUMA */
+
+static inline void numa_store_cpu_info(unsigned int cpu) { }
+static inline void arm64_numa_init(void) { }
+static inline void early_map_cpu_to_node(unsigned int cpu, int nid) { }
+
+#endif	/* CONFIG_NUMA */
 
 #endif	/* __ASM_NUMA_H */

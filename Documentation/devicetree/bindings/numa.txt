@@ -36,8 +36,8 @@ Example:
 3 - distance-map
 ==============================================================================
 
-The device tree node distance-map describes the relative
-distance(memory latency) between all numa nodes.
+The optional device tree node distance-map describes the relative
+distance (memory latency) between all numa nodes.
 
 - compatible : Should at least contain "numa-distance-map-v1".
 
@@ -48,13 +48,16 @@ distance(memory latency) between all numa nodes.
 
   Note:
 	1. Each entry represents distance from first node to second node.
-	The distance are equal in either direction.
-	2. The distance from a node to self(local distance) is represented
-	with value 10 and all inter node distance should be represented with
-	value greater than 10.
-	3. distance-matrix shold have entries in lexicographical ascending
+	The distances are equal in either direction.
+	2. The distance from a node to self (local distance) is represented
+	with value 10 and all internode distance should be represented with
+	a value greater than 10.
+	3. distance-matrix should have entries in lexicographical ascending
 	order of nodes.
-	4. There must be only one Device node distance-map and must reside in the root node.
+	4. There must be only one device node distance-map which must
+	reside in the root node.
+	5. If the distance-map node is not present, a default
+	distance-matrix is used.
 
 Example:
 	4 nodes connected in mesh/ring topology as below,
@@ -69,7 +72,7 @@ Example:
 		3       20      2
 
 	if relative distance for each hop is 20,
-	then inter node distance would be,
+	then internode distance would be,
 	      0 -> 1 = 20
 	      1 -> 2 = 20
 	      2 -> 3 = 20
@@ -103,19 +106,19 @@ Example:
 4 - Example dts
 ==============================================================================
 
-2 sockets system consists of 2 boards connected through ccn bus and
+Dual socket system consists of 2 boards connected through ccn bus and
 each board having one socket/soc of 8 cpus, memory and pci bus.
 
-	memory@00c00000 {
+	memory@c00000 {
 		device_type = "memory";
-		reg = <0x0 0x00c00000 0x0 0x80000000>;
+		reg = <0x0 0xc00000 0x0 0x80000000>;
 		/* node 0 */
 		numa-node-id = <0>;
 	};
 
 	memory@10000000000 {
 		device_type = "memory";
-		reg = <0x100 0x00000000 0x0 0x80000000>;
+		reg = <0x100 0x0 0x0 0x80000000>;
 		/* node 1 */
 		numa-node-id = <1>;
 	};
@@ -124,123 +127,123 @@ each board having one socket/soc of 8 cpus, memory and pci bus.
 		#address-cells = <2>;
 		#size-cells = <0>;
 
-		cpu@000 {
+		cpu@0 {
 			device_type = "cpu";
 			compatible =  "arm,armv8";
-			reg = <0x0 0x000>;
+			reg = <0x0 0x0>;
 			enable-method = "psci";
 			/* node 0 */
 			numa-node-id = <0>;
 		};
-		cpu@001 {
+		cpu@1 {
 			device_type = "cpu";
 			compatible =  "arm,armv8";
-			reg = <0x0 0x001>;
+			reg = <0x0 0x1>;
 			enable-method = "psci";
 			numa-node-id = <0>;
 		};
-		cpu@002 {
+		cpu@2 {
 			device_type = "cpu";
 			compatible =  "arm,armv8";
-			reg = <0x0 0x002>;
+			reg = <0x0 0x2>;
 			enable-method = "psci";
 			numa-node-id = <0>;
 		};
-		cpu@003 {
+		cpu@3 {
 			device_type = "cpu";
 			compatible =  "arm,armv8";
-			reg = <0x0 0x003>;
+			reg = <0x0 0x3>;
 			enable-method = "psci";
 			numa-node-id = <0>;
 		};
-		cpu@004 {
+		cpu@4 {
 			device_type = "cpu";
 			compatible =  "arm,armv8";
-			reg = <0x0 0x004>;
+			reg = <0x0 0x4>;
 			enable-method = "psci";
 			numa-node-id = <0>;
 		};
-		cpu@005 {
+		cpu@5 {
 			device_type = "cpu";
 			compatible =  "arm,armv8";
-			reg = <0x0 0x005>;
+			reg = <0x0 0x5>;
 			enable-method = "psci";
 			numa-node-id = <0>;
 		};
-		cpu@006 {
+		cpu@6 {
 			device_type = "cpu";
 			compatible =  "arm,armv8";
-			reg = <0x0 0x006>;
+			reg = <0x0 0x6>;
 			enable-method = "psci";
 			numa-node-id = <0>;
 		};
-		cpu@007 {
+		cpu@7 {
 			device_type = "cpu";
 			compatible =  "arm,armv8";
-			reg = <0x0 0x007>;
+			reg = <0x0 0x7>;
 			enable-method = "psci";
 			numa-node-id = <0>;
 		};
-		cpu@008 {
+		cpu@8 {
 			device_type = "cpu";
 			compatible =  "arm,armv8";
-			reg = <0x0 0x008>;
+			reg = <0x0 0x8>;
 			enable-method = "psci";
 			/* node 1 */
 			numa-node-id = <1>;
 		};
-		cpu@009 {
+		cpu@9 {
 			device_type = "cpu";
 			compatible =  "arm,armv8";
-			reg = <0x0 0x009>;
+			reg = <0x0 0x9>;
 			enable-method = "psci";
 			numa-node-id = <1>;
 		};
-		cpu@00a {
+		cpu@a {
 			device_type = "cpu";
 			compatible =  "arm,armv8";
-			reg = <0x0 0x00a>;
+			reg = <0x0 0xa>;
 			enable-method = "psci";
 			numa-node-id = <1>;
 		};
-		cpu@00b {
+		cpu@b {
 			device_type = "cpu";
 			compatible =  "arm,armv8";
-			reg = <0x0 0x00b>;
+			reg = <0x0 0xb>;
 			enable-method = "psci";
 			numa-node-id = <1>;
 		};
-		cpu@00c {
+		cpu@c {
 			device_type = "cpu";
 			compatible =  "arm,armv8";
-			reg = <0x0 0x00c>;
+			reg = <0x0 0xc>;
 			enable-method = "psci";
 			numa-node-id = <1>;
 		};
-		cpu@00d {
+		cpu@d {
 			device_type = "cpu";
 			compatible =  "arm,armv8";
-			reg = <0x0 0x00d>;
+			reg = <0x0 0xd>;
 			enable-method = "psci";
 			numa-node-id = <1>;
 		};
-		cpu@00e {
+		cpu@e {
 			device_type = "cpu";
 			compatible =  "arm,armv8";
-			reg = <0x0 0x00e>;
+			reg = <0x0 0xe>;
 			enable-method = "psci";
 			numa-node-id = <1>;
 		};
-		cpu@00f {
+		cpu@f {
 			device_type = "cpu";
 			compatible =  "arm,armv8";
-			reg = <0x0 0x00f>;
+			reg = <0x0 0xf>;
 			enable-method = "psci";
 			numa-node-id = <1>;
 		};
 	};
 
-	pcie0: pcie0@0x8480,00000000 {
+	pcie0: pcie0@848000000000 {
 		compatible = "arm,armv8";
 		device_type = "pci";
 		bus-range = <0 255>;
@@ -252,7 +255,7 @@ each board having one socket/soc of 8 cpus, memory and pci bus.
 		numa-node-id = <0>;
         };
 
-	pcie1: pcie1@0x9480,00000000 {
+	pcie1: pcie1@948000000000 {
 		compatible = "arm,armv8";
 		device_type = "pci";
 		bus-range = <0 255>;

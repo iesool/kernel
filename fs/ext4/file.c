@@ -194,15 +194,27 @@ out:
 #ifdef CONFIG_FS_DAX
 static int ext4_dax_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
-	return dax_fault(vma, vmf, ext4_get_block);
+	int ret;
+	struct inode *inode = file_inode(vma->vm_file);
+
+	down_read(&EXT4_I(inode)->i_mmap_sem);
+	ret = dax_fault(vma, vmf, ext4_get_block);
 					/* Is this the right get_block? */
+	up_read(&EXT4_I(inode)->i_mmap_sem);
+	return ret;
 }
 
 static int ext4_dax_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
-	return dax_mkwrite(vma, vmf, ext4_get_block);
-}
+	int ret;
+	struct inode *inode = file_inode(vma->vm_file);
 
+	down_read(&EXT4_I(inode)->i_mmap_sem);
+	ret = dax_mkwrite(vma, vmf, ext4_get_block);
+	up_read(&EXT4_I(inode)->i_mmap_sem);
+
+	return ret;
+}
 static const struct vm_operations_struct ext4_dax_vm_ops = {
 	.fault		= ext4_dax_fault,
 	.page_mkwrite	= ext4_dax_mkwrite,
@@ -213,7 +225,7 @@ static const struct vm_operations_struct ext4_dax_vm_ops = {
 #endif
 
 static const struct vm_operations_struct ext4_file_vm_ops = {
-	.fault		= filemap_fault,
+	.fault		= ext4_filemap_fault,
 	.map_pages	= filemap_map_pages,
 	.page_mkwrite   = ext4_page_mkwrite,
 };

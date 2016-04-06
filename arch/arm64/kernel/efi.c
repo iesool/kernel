@@ -34,6 +34,9 @@
 #include <asm/mmu.h>
 #include <asm/pgtable.h>
 
+/* we will fill this structure from the stub, so don't put it in .bss */
+struct screen_info screen_info __section(.data);
+
 struct efi_memory_map memmap;
 
 static u64 efi_system_table;

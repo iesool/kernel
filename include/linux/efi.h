@@ -279,7 +279,7 @@ typedef struct {
 	void *register_protocol_notify;
 	void *locate_handle;
 	void *locate_device_path;
-	void *install_configuration_table;
+	efi_status_t (*install_configuration_table)(efi_guid_t *, void *);
 	void *load_image;
 	void *start_image;
 	void *exit;

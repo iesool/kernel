@@ -42,7 +42,9 @@ extern void efi_init_fdt(void *fdt);
 #define EFI_FDT_ALIGN		MIN_FDT_ALIGN
 #define EFI_FDT_MAX_SIZE	MAX_FDT_SIZE
 
-#define efi_call_early(f, ...) sys_table_arg->boottime->f(__VA_ARGS__)
+#define efi_call_early(f, ...)		sys_table_arg->boottime->f(__VA_ARGS__)
+#define __efi_call_early(f, ...)	f(__VA_ARGS__)
+#define efi_is_64bit()			(1)
 
 #define EFI_ALLOC_ALIGN		SZ_64K
 

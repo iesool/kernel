@@ -26,6 +26,7 @@
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
+#include <linux/platform_device.h>
 
 #include <asm/cacheflush.h>
 #include <asm/efi.h>
@@ -233,6 +234,19 @@ void __init efi_init_fdt(void *fdt)
 	reserve_regions();
 	early_memunmap(memmap.map, params.mmap_size);
 }
+
+static int __init register_gop_device(void)
+{
+	void *pd;
+
+	if (screen_info.orig_video_isVGA != VIDEO_TYPE_EFI)
+		return 0;
+
+	/* the efifb driver accesses screen_info directly, no need to pass it */
+	pd = platform_device_register_simple("efi-framebuffer", 0, NULL, 0);
+	return PTR_ERR_OR_ZERO(pd);
+}
+subsys_initcall(register_gop_device);
 
 static bool __init efi_virtmap_init(void)
 {

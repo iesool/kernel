@@ -6,12 +6,15 @@
  *
  */
 
+#include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/efi.h>
 #include <linux/errno.h>
 #include <linux/fb.h>
 #include <linux/platform_device.h>
 #include <linux/screen_info.h>
+#include <linux/dmi.h>
+#include <linux/pci.h>
 #include <video/vga.h>
 #include <asm/efi.h>
 
@@ -328,4 +331,5 @@ static struct platform_driver efifb_driver = {
 	.remove = efifb_remove,
 };
 
-builtin_platform_driver(efifb_driver);
+module_platform_driver(efifb_driver);
+MODULE_LICENSE("GPL");

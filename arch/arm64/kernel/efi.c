@@ -233,6 +233,9 @@ void __init efi_init_fdt(void *fdt)
 
 	reserve_regions();
 	early_memunmap(memmap.map, params.mmap_size);
+
+	if (screen_info.orig_video_isVGA == VIDEO_TYPE_EFI)
+		memblock_reserve(screen_info.lfb_base, screen_info.lfb_size);
 }
 
 static int __init register_gop_device(void)

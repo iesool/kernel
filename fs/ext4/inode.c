@@ -4815,15 +4815,14 @@ int ext4_setattr(struct dentry *dentry, struct iattr *attr)
 		 * in data=journal mode to make pages freeable.
 		 */
 		truncate_pagecache(inode, inode->i_size);
-		ext4_truncate(inode);
 		up_write(&EXT4_I(inode)->i_mmap_sem);
-	} else if (attr->ia_valid & ATTR_SIZE) {
-		/*
-		 * We want to call ext4_truncate() even if attr->ia_size ==
-		 * inode->i_size for cases like truncation of fallocated space
-		 */
-		ext4_truncate(inode);
 	}
+	/*
+	 * We want to call ext4_truncate() even if attr->ia_size ==
+	 * inode->i_size for cases like truncation of fallocated space
+	 */
+	if (attr->ia_valid & ATTR_SIZE)
+		ext4_truncate(inode);
 
 	if (!rc) {
 		setattr_copy(inode, attr);

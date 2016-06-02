@@ -915,9 +915,8 @@ static void usb_bus_init (struct usb_bus *bus)
 	bus->bandwidth_allocated = 0;
 	bus->bandwidth_int_reqs  = 0;
 	bus->bandwidth_isoc_reqs = 0;
-	mutex_init(&bus->usb_address0_mutex);
-
 	INIT_LIST_HEAD (&bus->bus_list);
+	mutex_init(&bus->usb_address0_mutex);
 }
 
 /*-------------------------------------------------------------------------*/
@@ -2523,8 +2522,9 @@ static void hcd_release(struct kref *kref)
 	struct usb_hcd *hcd = container_of (kref, struct usb_hcd, kref);
 
 	mutex_lock(&usb_port_peer_mutex);
-	if (usb_hcd_is_primary_hcd(hcd))
+	if (usb_hcd_is_primary_hcd(hcd)) {
 		kfree(hcd->bandwidth_mutex);
+	}
 	if (hcd->shared_hcd) {
 		struct usb_hcd *peer = hcd->shared_hcd;
 

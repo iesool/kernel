@@ -704,6 +704,56 @@ int xt_check_entry_offsets(const void *base,
 }
 EXPORT_SYMBOL(xt_check_entry_offsets);
 
+/**
+ * xt_alloc_entry_offsets - allocate array to store rule head offsets
+ *
+ * @size: number of entries
+ *
+ * Return: NULL or kmalloc'd or vmalloc'd array
+ */
+unsigned int *xt_alloc_entry_offsets(unsigned int size)
+{
+	unsigned int *off;
+
+	off = kcalloc(size, sizeof(unsigned int), GFP_KERNEL | __GFP_NOWARN);
+
+	if (off)
+		return off;
+
+	if (size < (SIZE_MAX / sizeof(unsigned int)))
+		off = vmalloc(size * sizeof(unsigned int));
+
+	return off;
+}
+EXPORT_SYMBOL(xt_alloc_entry_offsets);
+
+/**
+ * xt_find_jump_offset - check if target is a valid jump offset
+ *
+ * @offsets: array containing all valid rule start offsets of a rule blob
+ * @target: the jump target to search for
+ * @size: entries in @offset
+ */
+bool xt_find_jump_offset(const unsigned int *offsets,
+			 unsigned int target, unsigned int size)
+{
+	int m, low = 0, hi = size;
+
+	while (hi > low) {
+		m = (low + hi) / 2u;
+
+		if (offsets[m] > target)
+			hi = m;
+		else if (offsets[m] < target)
+			low = m + 1;
+		else
+			return true;
+	}
+
+	return false;
+}
+EXPORT_SYMBOL(xt_find_jump_offset);
+
 int xt_check_target(struct xt_tgchk_param *par,
 		    unsigned int size, u_int8_t proto, bool inv_proto)
 {
@@ -753,6 +803,80 @@ int xt_check_target(struct xt_tgchk_param *par,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(xt_check_target);
+
+/**
+ * xt_copy_counters_from_user - copy counters and metadata from userspace
+ *
+ * @user: src pointer to userspace memory
+ * @len: alleged size of userspace memory
+ * @info: where to store the xt_counters_info metadata
+ * @compat: true if we setsockopt call is done by 32bit task on 64bit kernel
+ *
+ * Copies counter meta data from @user and stores it in @info.
+ *
+ * vmallocs memory to hold the counters, then copies the counter data
+ * from @user to the new memory and returns a pointer to it.
+ *
+ * If @compat is true, @info gets converted automatically to the 64bit
+ * representation.
+ *
+ * The metadata associated with the counters is stored in @info.
+ *
+ * Return: returns pointer that caller has to test via IS_ERR().
+ * If IS_ERR is false, caller has to vfree the pointer.
+ */
+void *xt_copy_counters_from_user(const void __user *user, unsigned int len,
+				 struct xt_counters_info *info, bool compat)
+{
+	void *mem;
+	u64 size;
+
+#ifdef CONFIG_COMPAT
+	if (compat) {
+		/* structures only differ in size due to alignment */
+		struct compat_xt_counters_info compat_tmp;
+
+		if (len <= sizeof(compat_tmp))
+			return ERR_PTR(-EINVAL);
+
+		len -= sizeof(compat_tmp);
+		if (copy_from_user(&compat_tmp, user, sizeof(compat_tmp)) != 0)
+			return ERR_PTR(-EFAULT);
+
+		strlcpy(info->name, compat_tmp.name, sizeof(info->name));
+		info->num_counters = compat_tmp.num_counters;
+		user += sizeof(compat_tmp);
+	} else
+#endif
+	{
+		if (len <= sizeof(*info))
+			return ERR_PTR(-EINVAL);
+
+		len -= sizeof(*info);
+		if (copy_from_user(info, user, sizeof(*info)) != 0)
+			return ERR_PTR(-EFAULT);
+
+		info->name[sizeof(info->name) - 1] = '\0';
+		user += sizeof(*info);
+	}
+
+	size = sizeof(struct xt_counters);
+	size *= info->num_counters;
+
+	if (size != (u64)len)
+		return ERR_PTR(-EINVAL);
+
+	mem = vmalloc(len);
+	if (!mem)
+		return ERR_PTR(-ENOMEM);
+
+	if (copy_from_user(mem, user, len) == 0)
+		return mem;
+
+	vfree(mem);
+	return ERR_PTR(-EFAULT);
+}
+EXPORT_SYMBOL_GPL(xt_copy_counters_from_user);
 
 #ifdef CONFIG_COMPAT
 int xt_compat_target_offset(const struct xt_target *target)

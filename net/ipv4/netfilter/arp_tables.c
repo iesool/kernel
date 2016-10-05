@@ -656,8 +656,6 @@ static int translate_table(struct xt_table_info *newinfo, void *entry0,
 			++newinfo->stacksize;
 	}
 	duprintf("translate_table: ARPT_ENTRY_ITERATE gives %d\n", ret);
-	if (ret != 0)
-		goto out_free;
 
 	ret = -EINVAL;
 	if (i != repl->num_entries) {
@@ -1360,11 +1358,6 @@ static int translate_compat_table(struct xt_table_info **pinfo,
 	ret = translate_table(newinfo, entry1, &repl);
 	if (ret)
 		goto free_newinfo;
-
-	/* And one copy for every other CPU */
-	for_each_possible_cpu(i)
-		if (newinfo->entries[i] && newinfo->entries[i] != entry1)
-			memcpy(newinfo->entries[i], entry1, newinfo->size);
 
 	*pinfo = newinfo;
 	*pentry0 = entry1;

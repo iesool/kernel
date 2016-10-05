@@ -821,8 +821,6 @@ posix_acl_xattr_set(struct dentry *dentry, const char *name,
 	struct posix_acl *acl = NULL;
 	int ret;
 
-	if (strcmp(name, "") != 0)
-		return -EINVAL;
 	if (value) {
 		acl = posix_acl_from_xattr(&init_user_ns, value, size);
 		if (IS_ERR(acl))

@@ -1482,7 +1482,8 @@ check_compat_entry_size_and_hooks(struct compat_ipt_entry *e,
 	entry_offset = (void *)e - (void *)base;
 	j = 0;
 	xt_ematch_foreach(ematch, e) {
-		ret = compat_find_calc_match(ematch, &e->ip, e->comefrom, &off);
+		ret = compat_find_calc_match(ematch, &e->ip, e->comefrom,
+					     &off);
 		if (ret != 0)
 			goto release_matches;
 		++j;
@@ -1636,11 +1637,6 @@ translate_compat_table(struct net *net,
 	ret = translate_table(net, newinfo, entry1, &repl);
 	if (ret)
 		goto free_newinfo;
-
-	/* And one copy for every other CPU */
-	for_each_possible_cpu(i)
-		if (newinfo->entries[i] && newinfo->entries[i] != entry1)
-			memcpy(newinfo->entries[i], entry1, newinfo->size);
 
 	*pinfo = newinfo;
 	*pentry0 = entry1;
